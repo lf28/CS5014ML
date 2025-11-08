@@ -1,0 +1,4546 @@
+### A Pluto.jl notebook ###
+# v0.19.38
+
+using Markdown
+using InteractiveUtils
+
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
+# ╔═╡ 9f90a18b-114f-4039-9aaf-f52c77205a49
+begin
+	using LinearAlgebra
+	using PlutoUI
+	using PlutoTeachingTools
+	using LaTeXStrings
+	using Latexify
+	using Random
+	# using Statistics
+	using HypertextLiteral
+	using Plots; default(fontfamily="Computer Modern", framestyle=:box) # LaTex-style
+	
+end
+
+# ╔═╡ e1d678d8-5a54-4f11-8fc6-5938c732c971
+using DataFrames, Distributions, Flux
+
+# ╔═╡ 53fece27-0cf8-42ac-a2d1-a60dafde5820
+using StatsPlots
+
+# ╔═╡ 587b7208-2559-4e4d-958c-09b0eec20caf
+begin
+	using Logging
+	Logging.disable_logging(Logging.Info) ; # or e.g. Logging.Info
+end;
+
+# ╔═╡ a0c70958-56fc-4536-ac9a-c5feea3e025b
+using PalmerPenguins
+
+# ╔═╡ bc1c6156-5b95-4f22-949a-f2ae81d5b94d
+using MLUtils
+
+# ╔═╡ c9939ed7-1f77-448f-b593-3da7d6c1a901
+using Zygote
+
+# ╔═╡ 3e2e1ea8-3a7d-462f-ac38-43a087907a14
+TableOfContents()
+
+# ╔═╡ 74e7d966-4795-4007-8a36-04fc48948b87
+figure_url = "https://leo.host.cs.st-andrews.ac.uk/figs/";
+
+# ╔═╡ eb301a70-b651-43b4-b091-a3f90332d1aa
+function show_img(path_to_file; center=true, h = 400, w = nothing)
+	if center
+		if isnothing(w)
+			@htl """<center><img src= $(figure_url * path_to_file) height = '$(h)' /></center>"""
+		else
+			@htl """<center><img src= $(figure_url * path_to_file) width = '$(w)' /></center>"""
+		end
+
+	else
+		if isnothing(w)
+			@htl """<img src= $(figure_url * path_to_file) height = '$(h)' />"""
+		else
+			@htl """<img src= $(figure_url * path_to_file) width = '$(w)' />"""
+		end
+	end
+end;
+
+# ╔═╡ 7bbf37e1-27fd-4871-bc1d-c9c3ecaac076
+ChooseDisplayMode()
+
+# ╔═╡ 603fdd1f-4505-4d57-965f-2d273c3c9979
+begin
+	ENV["DATADEPS_ALWAYS_ACCEPT"] = true
+	table = PalmerPenguins.load()
+ 	df = DataFrame(table)
+end;
+
+# ╔═╡ bc96a33d-9011-41ec-a19e-d472cbaafb70
+md"""
+
+# CS5014 Machine Learning
+
+
+#### Softmax regression
+
+\
+
+$(Resource("https://www.st-andrews.ac.uk/assets/university/brand/logos/standard-vertical-black.png", :width=>130, :align=>"right"))
+
+Lei Fang(@lf28 $(Resource("https://raw.githubusercontent.com/edent/SuperTinyIcons/bed6907f8e4f5cb5bb21299b9070f4d7c51098c0/images/svg/github.svg", :width=>10)))
+
+*School of Computer Science*
+
+*University of St Andrews, UK*
+
+"""
+
+# ╔═╡ 48255e3f-307a-49cc-ad5e-cb3557cbff11
+md"""
+
+# Softmax regression
+"""
+
+# ╔═╡ 560fcd11-616f-46c6-b0c5-2b8348af81d3
+md"""
+
+## Reading & references
+
+##### Essential reading 
+
+
+* **Multi-class classification** [_Understanding Deep Learning_ by _Simon Prince_: Chapter 5.5](https://github.com/udlbook/udlbook/releases/download/v2.00/UnderstandingDeepLearning_28_01_24_C.pdf)
+
+##### Suggested reading 
+
+* **Softmax regression** [_Pattern recognition and machine learning_ by _Christopher Bishop_: Chapter 4.3.4](https://www.microsoft.com/en-us/research/uploads/prod/2006/01/Bishop-Pattern-Recognition-and-Machine-Learning-2006.pdf)
+
+
+
+"""
+
+# ╔═╡ cf744c13-74c7-4c94-946b-7fb36b69f3da
+
+md"""
+## Multi-class classification
+
+"""
+
+# ╔═╡ c91f899c-18a3-46f8-b0a2-af122b06007c
+TwoColumn(md"""
+\
+\
+
+#### A multi-class classification problem
+* #### ``C=3`` classes
+""", html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/threeclass.png
+' width = '300' /></center>"	)
+
+# ╔═╡ 8fb15c2c-d2ed-4da7-b570-3a4f6580f53e
+md"""
+
+## Recap: binary logistic regression
+
+
+> ```math
+> \large
+> 
+> p(y^{(i)}=1|\mathbf{w}, \mathbf{x}^{(i)})=\sigma(\mathbf{w}^\top\mathbf{x}^{(i)})
+> ```
+
+"""
+
+# ╔═╡ f9e5a4f1-4c1d-4ab0-8d24-865407eeacf1
+md"Move me: $(@bind iidx Slider(1:10))"
+
+# ╔═╡ ffa724f4-8bfd-4d8c-bc6b-83ffc83c8cfa
+ThreeColumn(
+	let
+plot(x -> x, size=(280,300), label="", xlabel=L"x", lw=2, ylabel=L"h(x)")
+
+annotate!([-0.4], [0.0], text(L"w^\top x", :blue,:right))
+	end
+,
+
+	
+md"""
+
+\
+\
+\
+\
+
+#### $$\xRightarrow[]{\text{squeeze}}$$
+
+"""
+	,
+let	
+plot(-7:0.1:8, x -> sigmoid(x), xlim =(-6, 7.5),  size=(320,300), xlabel=L"x", lw=2, lc=2, label="", ylabel=L"p(y=1|x)")
+annotate!([0.0], [sigmoid(0.)], text(L"\sigma(w^\top x)", :red))
+
+xs = [range(-4.5, -1.1, 5); range(1.1, 4.9, 5)...] 
+ys = [zeros(5)...; ones(5)...] 
+scatter!(xs[1:5], zeros(5), c=1, ms=5,  label="class 0")
+scatter!(xs[6:end], ones(5), c=2, ms=5, label="class 1")
+c = ys[iidx] == 0 ? :blue : :red
+
+pos = ys[iidx] == 0 ? :bottom : :top
+scatter!([xs[iidx]], [ys[iidx]], ms=5, m=:x, mc=:gray, markerstrokewidth=5, label="", series_annotations = [text(L"p(y=1|x)= %$(round(sigmoid(xs[iidx]); digits=2))", 12, c , pos)])
+
+plot!([xs[iidx], xs[iidx]], [ys[iidx], sigmoid(xs[iidx])], st=:path, lw=2, ls=:dash, lc=2, label="")	
+
+scatter!([xs[iidx]],[sigmoid(xs[iidx])], label="", mc=2)
+# plot!(x -> x, lc=1, ylim =(0, 1))
+	
+end
+)
+
+# ╔═╡ 3de4bc6d-a616-4125-8e18-ce54f8cdd4e8
+md"""
+
+## Softmax function
+
+
+##### The idea is very similar, we want the output 
+
+$$\Large 
+\text{output}_c = P(y=c |\mathbf{x})$$
+
+* ##### *i.e.* all non negative and sum to one
+
+```math
+\Large P(y=c |\mathbf{x}) > 0\;\; \text{for all class } c,\;\;\text{and } \sum_c P(y=c|\mathbf{x}) = 1
+```
+
+
+"""
+
+# ╔═╡ 520de0ba-11f9-42a9-9d29-fac3caf6cbe4
+# TwoColumnWideRight(md"""
+
+# #### `softmax` does the trick
+
+# $$\large \text{softmax}_i(\mathbf{s}) = \frac{\exp(s_i)} {\sum_{c=1}^C \exp(s_c)}$$
+
+
+# - all non-negative (due to `exp`) and **sum to one**
+
+# """, html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/exponentially_normalized_histogram.png
+# ' width= '800' /></center>")
+
+# ╔═╡ adf8aaa6-c5f4-4c53-8316-af55b0d29abb
+md"""
+
+## Aside: normalisation and ``\propto``
+
+#### *"Normalisation"*: divide by the sum
+
+$\langle 0.2, 0.3, 0.1 \rangle \stackrel{\text{normalise}}{\Longrightarrow} \left \langle \small \frac{0.2}{0.2+0.3 +0.1}, \frac{0.3}{0.2+0.3+0.1},  \frac{0.1}{0.2+0.3+0.1} \right \rangle = \left \langle \frac{2}{5}, \frac{3}{5}, \frac{1}{5}\right  \rangle$
+
+$\langle 2, 3, 1 \rangle \stackrel{\text{normalise}}{\Longrightarrow} \left\langle \frac{2}{2+3+1}, \frac{3}{2+3+1}, \frac{1}{2+3+1} \right\rangle  = \left\langle \frac{2}{5}, \frac{3}{5},\frac{1}{5} \right\rangle$
+
+#### ``\propto``: *proportional* 
+
+$\Large\langle 0.2, 0.3, 0.1\rangle \propto \langle 2, 3, 1 \rangle$
+
+* ##### the two are equal after normalisation
+
+"""
+
+# ╔═╡ 4730c3dc-c6c5-4151-ad21-8e4335d846a7
+md"""
+
+## Softmax function
+
+#### `softmax`  does the trick
+
+$$\large \text{softmax}_i(\mathbf{z}) = \frac{\exp(z_i)} {\sum_{c=1}^C \exp(z_c)}$$
+
+
+- ##### `exp`: non-negative 
+
+- ##### and *normalise* to one, therefore sum to 1
+
+"""
+
+# ╔═╡ fd8b60da-2f95-48c7-98e6-946f7108ab6c
+ThreeColumn(md"
+
+``\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\mathbf{z}=``$(latexify_md([-1, 0, 1]))
+
+", md"
+``\;\;\;\;\;\exp.{(\mathbf{z})}=``$(latexify_md(round.(exp.([-1, 0, 1]); digits=1)))
+
+
+", md"
+``\text{softmax}(\mathbf{z})=\frac{1}{.4+1.0+2.7}``$(latexify_md(round.(exp.([-1, 0, 1]);digits=1)))
+
+
+")
+
+# ╔═╡ 3fca0b63-9747-4802-8624-91353eadb8f2
+let
+
+	gr()
+	zs = [-1, 0, 1]
+
+	expzs = exp.(zs)
+
+	ss = expzs ./ sum(expzs)
+
+	plt1 = plot(zs, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", size=(300,300), ratio=1, xlabel="", title="input: "*L"\mathbf{z}")
+
+	
+	annotate!(1:3, zs, [text(L"z_1", :top), text(L"z_2", :bottom), text(L"z_3", :bottom)])
+
+	plt2 = plot(1:3, expzs, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", ratio=1, xlabel="",  title=L"\exp{(z_i)}")
+
+	annotate!(1:3, expzs, [text(L"e^{z_1}", :bottom), text(L"e^{z_2}", :bottom), text(L"e^{z_3}", :bottom)])
+	plt3 = plot(ss, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", size=(300,300), ratio=1, xlabel="", title="softmax output: "*L"\mathbf{\sigma}")
+	annotate!(1:3, ss, [text(L"\sigma_1", :bottom), text(L"\sigma_2", :bottom), text(L"\sigma_3", :bottom)])
+	plot(plt1, plt2, plt3, size=(800,350), ylim =(-1, 3), layout=(1,3))
+end
+
+# ╔═╡ df9fd096-56a4-4610-b1fc-f7cce4e19e83
+# html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS3105/softmax.jpeg
+# ' width = '500' /></center>"
+
+# ╔═╡ e73864ff-7106-4523-a049-805ca009796b
+# md"figure source: [^1]"
+
+# ╔═╡ 85da9bbd-ec12-48f0-9e96-0260cf68f04c
+# @latexify softmax([-1.3, 5.1, 2.2, 0.7, -1.1])=$(round.(softmax([-1.3, 5.1, 2.2, 0.7, -1.1]); digits=2))
+
+# ╔═╡ dbaf2be5-2005-4465-8cc2-c79ebf4343d4
+md"""
+
+## Softmax properties (0)
+
+"""
+
+# ╔═╡ 420a9f4b-a698-4bfc-88d7-13fac4cb592d
+show_img("sfm_propto.svg", h=150)
+
+# ╔═╡ 0a23160c-b95c-4823-add6-5a0453e20afb
+ThreeColumn(let
+
+	gr()
+	zs = [0, .5, 1]
+
+	expzs = exp.(zs)
+
+	ss = expzs ./ sum(expzs)
+
+	plt2 = plot(1:3, expzs, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", ratio=.7, xlabel="",  title=L"\exp{(z_i)}", size=(300, 200))
+	
+	annotate!(1:3, expzs, [text(L"e^{z_1}", :bottom), text(L"e^{z_2}", :bottom), text(L"e^{z_3}", :bottom)])
+
+end, md"""
+\
+\
+\
+\
+
+$$\;\;\;\;\;\;\;\Huge\propto$$
+""", 
+
+let
+	gr()
+	zs = [0, .5, 1]
+
+	expzs = exp.(zs)
+
+	ss = expzs ./ sum(expzs)
+
+	plt3 = plot(ss, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", size=(300,200), ratio=2.5, xlabel="", title="softmax output: "*L"\mathbf{\sigma}")
+	annotate!(1:3, ss, [text(L"\sigma_1", :bottom), text(L"\sigma_2", :bottom), text(L"\sigma_3", :bottom)])
+	
+end)
+
+# ╔═╡ 0d9885b7-71aa-40ad-affa-3f8555226d36
+md"""
+## Softmax properties (1)
+
+
+"""
+
+# ╔═╡ 7ff58ca3-9b24-49ba-8a72-38a6f3bc778c
+TwoColumn(
+md"""
+#### `hardmax`:
+
+
+$
+\texttt{hardmax}\left (\begin{bmatrix}
+-1.0\\
+3.0\\
+2.5\\
+1.0
+\end{bmatrix}\right ) = \begin{bmatrix}
+0\\
+1\\
+0\\
+0
+\end{bmatrix}$
+
+* ##### winner-take-all
+
+
+""",
+md"""
+#### `softmax`:
+
+\
+
+``\text{softmax}\left (\begin{bmatrix}-1.0 \\ 3.0 \\ 2.5\\ 1.0\end{bmatrix}\right )``=$(latexify_md(round.(softmax([-1., 3.0, 2.5, 1.0]); digits=2)))
+
+* ##### split in-between
+"""
+	
+)
+
+# ╔═╡ 92e71a67-51dc-4c09-9e4c-d05fe191af60
+let
+	gr()
+	zs = [-1.0, 3.0, 2.5, 1.0]
+	plt1 = plot(zs .== maximum(zs), st=:bar, bar_width=0.1, c=1:length(zs), label="", framestyle=:origin, yaxis=true, xlim =(0.5, 5.5), ylim =(0, 1.01), title="hardmax")
+	plt2 = plot(softmax(zs), st=:bar, bar_width=0.1, c=1:length(zs), label="", framestyle=:origin, yaxis=true, xlim =(0.5, 5.5),  ylim =(0, 1.01), title="softmax")
+	plot(plt1, plt2, layout=(1,2), size=(700,200), ratio=4)
+end
+
+# ╔═╡ 44c0ddec-b08c-478a-a74a-9346ee496440
+md"""
+## Softmax properties (2)
+
+
+#### `argmax` invariant
+
+
+```math
+\large
+{\arg\max_c \mathbf{z}}  = \arg\max_c\, \texttt{hardmax}_c(\mathbf{z}) = \arg\max_c\, \texttt{softmax}_c(\mathbf{z})
+```
+"""
+
+# ╔═╡ bf2fb318-0057-490d-b2fc-9eeda5381f54
+let
+	gr()
+	zs = [-1.0, 3.0, 2.5, 1.0]
+	bw = [0.1, 0.2, 0.1, 0.1]
+	plt0 = plot(zs , st=:bar, bar_width=bw, alpha =[0.2, 1.0, 0.2, 0.2],c=1:length(zs), label="",xticks =[2], framestyle=:origin, yaxis=true, xlim =(0.5, 5.5), ylim = (-1.01, 3.01),title="z", ratio=1.5)
+	plt1 = plot(zs .== maximum(zs), st=:bar, bar_width=bw, alpha =[0.2, 1.0, 0.2, 0.2], c=1:length(zs), label="", framestyle=:origin, yaxis=true,xticks =[2],  ylim =(0,1.01), xlim =(0.5, 5.5), title="hardmax(z)", ratio=3)
+	plt2 = plot(softmax(zs), st=:bar, bar_width=bw, alpha =[0.2, 1.0, 0.2, 0.2], c=1:length(zs), label="", framestyle=:origin, yaxis=true, xticks =[2], xlim =(0.5, 5.5), ylim =(0,1.01), title="softmax(z)", ratio=3)
+	plot(plt0, plt1, plt2, layout=(1,3))
+end
+
+# ╔═╡ e2b11e5b-616c-45e8-8e96-670c2487f8d3
+md"""
+
+
+
+## Softmax properties (3)
+
+
+#### `offset` or `shift` invariant
+
+```math
+\large
+\texttt{softmax}\left(\mathbf{z}\; .\pm \;\;z_0\right) = \texttt{softmax}(\mathbf{z})
+```
+* ``z_0`` is a constant (e.g. ``z_0 = \max(\mathbf{z})``)
+
+"""
+
+# ╔═╡ 2df3f4dc-8985-4da4-887d-a865ee7b141c
+md"##### shift ``\mathbf{z}`` by `-1`: that is ``\mathbf{z} - \mathbf{1}``"
+
+# ╔═╡ 00fc176b-e7f1-4046-ae0d-fbdd0b55b9ea
+Foldable("Why?", md"""
+
+Note that ``e^{a+b} = e^a e^b``
+
+```math
+\Large
+\frac{e^{z_i + z_0}}{\sum_c e^{z_c +z_0}} = \frac{\cancel{e^{z_0}} e^{z_i}}{\sum_c \cancel{e^{z_0}}e^{z_c}} = \frac{e^{z_i }}{\sum_c e^{z_c }}
+```
+
+""")
+
+# ╔═╡ 09b0e6e5-5a9b-4028-b64f-3bbca81e09a8
+md"""
+
+## _overflow safe_ softmax implementation
+
+* #### `exp(x)` suffers overflow for large `x`
+  * `exp(100)=Inf`
+"""
+
+# ╔═╡ aa623c42-1015-42c3-895a-74dc49b5c651
+exp(Float32(100)) ## overflow with 32bit float number
+
+# ╔═╡ 82a98346-b358-4e90-afa1-074b30247405
+let
+	zs = Float32[100, 101, 102]
+	exp.(zs) ## overflow [Inf, Inf, Inf]
+	exp.(zs) ./sum(exp.(zs)) ## Naive implementation NaN
+end
+
+# ╔═╡ 0d96b625-a929-41c4-bab2-d0f248fb58c9
+md"""
+
+
+* #### overflow safe `softmax` implemenation
+
+
+```math
+\large
+\texttt{softmax}(\mathbf{z}) = \texttt{softmax}\left(\mathbf{z}\; .- \;\;\max{(\mathbf{z})}\right)
+```
+* *i.e.* shift ``\mathbf{z}`` by its maximum
+"""
+
+# ╔═╡ 1bfde516-f3e5-41c3-9f7d-c6cfbe4d4373
+let
+	zs = Float32[100, 101, 102]
+	zs = zs .- maximum(zs) ## shift by maximum
+	exp.(zs) ./sum(exp.(zs)) ## overflow safe implementation
+end
+
+# ╔═╡ a754afcb-55bf-4d38-9dc3-efd8bbb565e9
+# let
+
+# 	zs = [-1, 0, 1] .- 1
+
+# 	expzs = exp.(zs)
+
+# 	ss = expzs ./ sum(expzs)
+
+# 	plt1 = plot(zs, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", size=(300,300), ratio=1, xlabel="", title="input: "*L"\mathbf{z}")
+
+	
+# 	annotate!(1:3, zs, [text(L"z_1", :top), text(L"z_2", :bottom), text(L"z_3", :bottom)])
+
+# 	plt2 = plot(1:3, expzs, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", ratio=1, xlabel="",  title=L"\exp{(s_i)}")
+
+# 	annotate!(1:3, expzs, [text(L"e^{z_1}", :bottom), text(L"e^{z_2}", :bottom), text(L"e^{z_3}", :bottom)])
+# 	plt3 = plot(ss, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", size=(300,300), ratio=1, xlabel="", title="softmax output: "*L"\mathbf{\sigma}")
+# 	annotate!(1:3, ss, [text(L"\sigma_1", :bottom), text(L"\sigma_2", :bottom), text(L"\sigma_3", :bottom)])
+# 	plot(plt1, plt2, plt3, size=(800,350), ylim =(-2.5, 2), layout=(1,3))
+# end
+
+# ╔═╡ 69a7335d-eb77-4e76-b59e-955bb9c40c8b
+md"""
+
+## Softmax regression
+"""
+
+# ╔═╡ 979e2617-fd43-452c-a6a3-8564861dd3f6
+md"""Move ``x``: $(@bind x_sfmx Slider(-6:0.2:6)), add data: $(@bind add_sfx_data CheckBox(false))"""
+
+# ╔═╡ 75e3cbce-4dd6-48fe-b18a-e72a81464000
+md"""
+
+## Softmax regression -- illustration in `1-dim`
+"""
+
+# ╔═╡ 9e03ebc7-dbd2-4f51-ad21-f4e52e7d6eaf
+let
+
+	gr()
+
+	# plts = []
+	
+	
+	anim = @animate for x_sfmx in range(-5.5, 5.5, 20)
+		plt1 = plot(labels=L"x", color=:black, ms=5, markershape=:x, xlabel=L"x", ylabel=L"z", legend=false, size=(280,300), xlim =(-6.1, 6.1))
+
+		for c in 1:3
+			plot!(plt1, -6:0.5:6, (x) -> (true_b + true_W * x)[c], lw=2, lc=c, label=L"z_{%$(c)}", title="", legendfontsize=10)
+		end
+		zs = (true_b + true_W * x_sfmx)
+		s_x = softmax(zs)
+		maxc = argmax(zs)
+		xmin = xxs[findfirst(max_xxs .== maxc)]
+		xmax = xxs[findlast(max_xxs .== maxc)]
+		# zss =  (true_b .+ true_W * xxs)
+		vspan!([xmin, xmax], c=maxc, alpha=0.2)
+		vline!([x_sfmx], lc=:gray, ls=:dash, title=L"\mathbf{z} = %$(round.((true_W * x_sfmx + true_b); digits=2))")
+		scatter!(ones(3) * x_sfmx, zs, c=1:3, m=:+,ms=5,markerstrokewidth=4)
+		# plt
+		plt2 = plot(labels=L"x", color=:black, ms=5, markershape=:x, xlabel=L"x", ylabel=L"p(y|x)", legend=:left, size=(330,300))
+		for c in 1:3
+			plot!(plt2, -6.1:0.05:6.1, (x) -> softmax(true_b + true_W * x)[c], lw=2, label=L"p(y=%$(c)|x)", title="", legendfontsize=10, xlim =(-6.1, 6.1))
+		end
+	
+		vline!([x_sfmx], lc=:gray, ls=:dash, title=L"p(y|x) = %$(round.(softmax(true_W * x_sfmx + true_b); digits=2))", label="")
+		scatter!(ones(3) * x_sfmx, s_x, m=:x,ms=4,markerstrokewidth=4, c=1:3, label="")
+		lw = ordinalrank(s_x)
+		for c in 1:3
+			plot!([x_sfmx, x_sfmx], [0, s_x[c]], st=:path, lw = lw[c], lc=c,  ls=:dash, label="")
+		end
+
+		vspan!([xmin, xmax], c=maxc, alpha=0.2, label="")
+
+
+		plt3 = plot(zs, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", size=(300,300), xlabel="", title="input: "*L"\mathbf{z}", ylim =(-12, 12))
+		top_downs = [z > 0 ? :bottom : :top for z in zs]
+		annotate!(1:3, zs, [text(L"z_1", top_downs[1]), text(L"z_2", top_downs[2]), text(L"z_3", top_downs[3])])
+
+
+		# ss= soft_max((true_b + true_W * x_sfmx))
+		plt4 = plot(s_x, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", size=(300,300), ratio=1, xlabel="", title="softmax output: "*L"\mathbf{\sigma}")
+		annotate!(1:3, s_x, [text(L"\sigma_1", :bottom), text(L"\sigma_2", :bottom), text(L"\sigma_3", :bottom)], ylim =(0,1))
+		
+
+		plot(plt1, plt2, plt3, plt4, layout=(2,2), size=(700,450))
+		# push!(plts, plt)
+	end
+
+	gif(anim; fps=4)
+end
+
+# ╔═╡ 3259e5fe-447b-4008-8b5f-cf6a1a13b1b3
+begin
+	true_W = [-2, 0.4, 2]
+	true_b =[0,4,0]
+	zz = true_W * x_sfmx + true_b
+end;
+
+# ╔═╡ 7ccf2092-8fe8-4194-85c2-ca336cfcbe23
+begin
+xxs = -6.1:0.1:6.1
+ 	max_xxs = argmax.(eachcol(true_b .+ true_W * (xxs)'))
+
+end;
+
+# ╔═╡ f1c74278-ba01-4e25-9b38-7fb2f32159a3
+ThreeColumn(
+	let
+	gr()
+	# logistic = σ
+	Random.seed!(12345)
+	# n_obs = 35
+
+	# xs = sort(rand(n_obs) * 10 .- 5)
+	
+	# x_centre = 0
+	plt = plot(labels=L"x", color=:black, ms=5, markershape=:x, xlabel=L"x", ylabel=L"z", legend=false, size=(280,300), xlim =(-6.2, 6.2))
+	for c in 1:3
+		plot!(plt, -6:0.5:6, (x) -> (true_b + true_W * x)[c], lw=2, label=L"z_{%$(c)}", title="", legendfontsize=10)
+	end
+	zs = (true_b + true_W * x_sfmx)
+	maxc = argmax(zs)
+	xmin = xxs[findfirst(max_xxs .== maxc)]
+	xmax = xxs[findlast(max_xxs .== maxc)]
+		# zss =  (true_b .+ true_W * xxs)
+	vspan!([xmin, xmax], c=maxc, alpha=0.2, label="")
+
+	vline!([x_sfmx], lc=:gray, ls=:dash, title=L"\mathbf{z} = %$(round.((true_W * x_sfmx + true_b); digits=2))")
+		scatter!(ones(3) * x_sfmx, (true_W * x_sfmx + true_b), c=1:3, m=:+,ms=5,markerstrokewidth=4)
+		plt
+	end
+,
+
+	
+md"""
+
+\
+\
+\
+\
+
+#### $$\xRightarrow[]{\text{softmax}}$$
+
+"""
+	,
+let	
+	n_obs = 30
+	Random.seed!(2345)
+	xs = range(-6, 6, n_obs)
+	# true_W = [-2, 0.4, 2]
+	# true_b =[0,4,0]
+	# σs = softmax(true_W * xs' .+ true_b)
+	# ys = rand.([Categorical(p[:]) for p in eachcol(σs)])
+	x_centre = 0
+	plt = plot(labels=L"x", color=:black, ms=5, markershape=:x, xlabel=L"x", ylabel=L"p(y|x)", legend=:left, size=(330,300), xlim =(-6.2,6.2))
+	# # true_w =[0, 1]
+	for c in 1:3
+		plot!(plt, -6:0.05:6, (x) -> softmax(true_b + true_W * x)[c], lw=2, label=L"p(y=%$(c)|x)", title="", legendfontsize=10)
+	end
+		
+	# end
+	
+		# zss =  (true_b .+ true_W * xxs)
+	# vspan!([xmin, xmax], c=maxc, alpha=0.2)
+# annotate!([0.0], [sigmoid(0.)], text(L"\sigma(w^\top x)", :red,:right))
+	zs = (true_b + true_W * x_sfmx)
+	maxc = argmax(zs)
+	xmin = xxs[findfirst(max_xxs .== maxc)]
+	xmax = xxs[findlast(max_xxs .== maxc)]
+		# zss =  (true_b .+ true_W * xxs)
+	vspan!([xmin, xmax], c=maxc, alpha=0.2, label="")
+	if add_sfx_data
+		zs = true_W .* xs' .+ true_b
+		yhats = softmax(zs)
+			ys = [sample(1:3, Weights(w)) for w in eachcol(yhats)]
+
+		for c in 1:3
+			scatter!(xs[ys .== c], (c -1)/2 * ones(sum(ys .== c)), c = c, ms=5,  label="class $(c)")
+		end
+	end
+	vline!([x_sfmx], lc=:gray, ls=:dash, title=L"p(y|x) = %$(round.(softmax(true_W * x_sfmx + true_b); digits=2))", label="")
+	scatter!(ones(3) * x_sfmx, softmax(true_W * x_sfmx + true_b), m=:x,ms=4,markerstrokewidth=4, c=1:3, label="")
+
+	s_x = softmax(true_W * x_sfmx + true_b)
+	lw = ordinalrank(s_x)
+	for c in 1:3
+		plot!([x_sfmx, x_sfmx], [0, s_x[c]], st=:path, lw = lw[c], lc=c,  ls=:dash, label="")
+	end
+	plt
+end
+)
+
+# ╔═╡ 011cb85f-6cf0-4a9b-83cd-b81ed394fe9c
+# TwoColumn(md""" 
+
+# ``\mathbf{z}=``$(latexify_md(round.((zz); digits=2)))
+
+# """, md"""
+
+# ``\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\begin{bmatrix}p(y=1|x) \\ p(y=2|x) \\ p(y=3|x) \end{bmatrix}``=$(latexify_md(round.(softmax(zz); digits=2)))
+# """)
+
+# ╔═╡ c31321f5-08a4-4a0e-af27-56bfc789c0a5
+md"""
+
+## Softmax regression illustration-- multi-`dim` 
+"""
+
+# ╔═╡ e5f22c46-b4b1-401e-a7fa-0452c0fb5025
+TwoColumn(md"""
+
+#### Affine transform 
+```math
+\large
+\begin{cases}
+z_1 = \mathbf{w}_1^\top \mathbf{x} + b_1\\
+z_2 = \mathbf{w}_2^\top \mathbf{x} + b_2\\
+z_3 = \mathbf{w}_3^\top \mathbf{x} + b_3
+\end{cases}
+```
+""", md"""
+
+#### Softmax transformation
+
+```math
+\large
+\begin{bmatrix}\sigma_1 \\ \sigma_2 \\ \sigma_3 \end{bmatrix}=\texttt{softmax}\left (\begin{bmatrix}z_1 \\ z_2 \\z_3\end{bmatrix}\right )
+```
+""")
+
+# ╔═╡ b367f7ba-89df-4c09-8402-cdffe9155153
+md"""
+
+## Softmax regression  -- implementation
+
+
+#### We need ``C`` linear functions (hyperplanes)
+
+```math
+\Large
+z_c = h_c(\mathbf{x}) = \mathbf{w}_c^\top \mathbf{x} + b_c
+```
+
+
+"""
+
+# ╔═╡ 2dfec88b-380d-49ad-80f5-cdcd01e21cea
+html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/multiclass1.svg
+' height = '350' /></center>"	
+
+# ╔═╡ 9e2d337a-0e26-4718-85ea-66b54349ec5d
+md"""
+## Softmax regression -- implementation
+"""
+
+# ╔═╡ 44bc4e5b-28f8-4e2b-a5f2-b62ecc059ac4
+html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/multiclass2.svg
+' height = '350' /></center>"	
+
+# ╔═╡ e5d97403-420a-4588-ba3b-99842da5927f
+md"""
+## Softmax regression -- implementation
+"""
+
+# ╔═╡ 23fbea1f-b083-46a1-924c-5485478345e3
+html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/multiclass3.svg
+' height = '350' /></center>"	
+
+# ╔═╡ 4e0a9717-7014-4dc2-b601-79d59742c133
+md"""
+## Softmax regression -- in matrix (vectorisation)
+"""
+
+# ╔═╡ 62d82f15-5d79-475f-a86b-0483f04a2d44
+TwoColumn(html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/multiclass3.svg
+' height = '350' /></center>", md"""
+\
+
+
+```math
+\begin{bmatrix}z_1 \\z_2 \\ \vdots \\z_C \end{bmatrix} = \begin{bmatrix}\rule[.5ex]{2.5ex}{0.5pt}  & \mathbf{w}_1^\top& \rule[.5ex]{2.5ex}{0.5pt}  \\\rule[.5ex]{2.5ex}{0.5pt} &  \mathbf{w}_2^\top&  \rule[.5ex]{2.5ex}{0.5pt}\\ & \vdots &\\\rule[.5ex]{2.5ex}{0.5pt} & \mathbf{w}_C^\top& \rule[.5ex]{2.5ex}{0.5pt}\end{bmatrix}\begin{bmatrix} \vert \\ \mathbf{x} \\ \vert  \end{bmatrix} + \begin{bmatrix} b_1\\b_2\\ \vdots   \\ b_C  \end{bmatrix}
+```
+\
+
+
+```math
+\Large\boxed{\mathbf{z} = \mathbf{W}_{C\times m}\mathbf{x} + \mathbf{b}}
+```
+
+""")
+
+# ╔═╡ 81e57214-62f5-4fe1-9a01-948c3175e43f
+md"""
+
+## Softmax regression -- implementation
+
+#### -- apply **softmax** at the end
+
+```math
+\Large
+\begin{align}
+\mathbf{z} &= \mathbf{W}_{C\times m}\mathbf{x} + \mathbf{b}\\
+\boldsymbol{\sigma} &= \texttt{softmax}(\mathbf{z})
+\end{align}
+```
+
+
+#### -- by introducing dummy `1` to ``\mathbf{x}``, 
+
+```math
+\Large
+\begin{align}
+\mathbf{z} &= \mathbf{W}_{C\times (m+1)}\mathbf{x}\\
+\boldsymbol{\sigma} &= \texttt{softmax}(\mathbf{z})
+\end{align}
+```
+
+* ``\mathbf{x} = \begin{bmatrix}1 \\ \mathbf{x} \end{bmatrix}``, ``\mathbf{W} = \begin{bmatrix}\mathbf{b}& \mathbf{W}\end{bmatrix}``
+
+"""
+
+# ╔═╡ 791330da-48ae-4ee0-a402-58764ce7e1bb
+html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/multiclass6.svg
+' height = '350' /></center>"
+
+# ╔═╡ 8695d896-cd0f-4153-a41b-9f24caf52047
+# md"""
+# ## Softmax regression -- summary
+
+# """
+
+# ╔═╡ bc571979-9458-4bfa-b74f-9c8105b79545
+# html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/multiclass7.svg
+# ' width = '850' /></center>"
+
+# ╔═╡ a307d1dd-7257-472f-bdc0-58e0a712fda7
+# html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/multiclass_histogram.png
+# ' width = '900' /></center>"
+
+# ╔═╡ 977112ba-29f5-4413-a7f8-4af33ce7fc44
+# md"""
+
+# ## (Recap) Probabilistic linear regression
+
+# > $\large \begin{align}p(y^{(i)}|\mathbf{x}^{(i)}, \mathbf{w}, \sigma^2) &= \mathcal{N}(y^{(i)};  \mathbf{w}^\top \mathbf{x}^{(i)} , \sigma^2)\end{align}$
+
+# """
+
+# ╔═╡ a3809050-7e2a-4ceb-a08a-4708247a761e
+# let
+# 	gr()
+# 	Random.seed!(123)
+# 	xs = rand(18) * 2 .- 1 |> sort
+# 	plt = plot(xs, zeros(length(xs)), st=:scatter, framestyle=:origin, labels=L"x", color=:black, ms=5, markershape=:x, xlabel=L"x", ylim=[-2.2, 2.5], ylabel=L"y", legend=:outerbottom, size=(400,450))
+# 	true_w =[0, 1]
+# 	plot!(-1:0.1:1.1, (x) -> true_w[1] + true_w[2]*x, lw=2, label="the true signal: " * L"h(x)", title="Probabilistic linear regression", size=(650,400))
+# 	true_σ² = 0.05
+# 	σ²0 = true_σ²
+# 	xis = xs
+
+# 	ys = xs * true_w[2] .+ true_w[1] + randn(length(xs)) * sqrt(σ²0)
+# 	anim = @animate for i in 1:length(xis)
+# 		x = xis[i]
+# 		μi = dot(true_w, [1, x])
+# 		σ = sqrt(σ²0)
+# 		xs_ = μi- 4 * σ :0.05:μi+ 4 * σ
+# 		ys_ = pdf.(Normal(μi, sqrt(σ²0)), xs_)
+# 		ys_ = 0.1 *ys_ ./ maximum(ys_)
+# 		if i == 1
+# 			plot!(ys_ .+x, xs_, c=1, label=L"p(y|x)", linewidth=1.0)
+# 		else
+# 			plot!(ys_ .+x, xs_, c=1, label="", linewidth=1.0)
+# 		end
+		
+# 		scatter!([xis[i]],[ys[i]], markershape = :circle, label="", c=1, markersize=4)
+# 	end
+
+# 	gif(anim; fps=4)
+# end
+
+# ╔═╡ 81aa6f2c-a1ca-43f4-a550-a3ec45d2faaa
+md"""
+
+## (Recap) Probabilistic logistic regression
+
+> ```math
+> \large
+> 
+> p(y^{(i)}|\mathbf{w}, \mathbf{x}^{(i)}) = \texttt{Bernoulli}(\sigma^{(i)}) =\begin{cases}\sigma^{(i)} & y^{(i)} =1
+> \\
+> 1-\sigma^{(i)} & y^{(i)} = 0   \end{cases}
+> ```
+> * ``\sigma^{(i)} = \sigma(\mathbf{w}^\top \mathbf{x}^{(i)})``
+
+
+"""
+
+# ╔═╡ 0b5237ce-d9a5-4ca2-b616-4c59c6b1dd12
+let
+	gr()
+	n_obs = 20
+	bias = .5 # 2
+	slope = 1.2 # 10, 0.1
+	logistic = σ
+	Random.seed!(4321)
+	xs = sort(rand(n_obs) * 10 .- 5)
+	true_w = [bias, slope]
+	# true_σ² = 0.05
+	ys = zeros(Bool, n_obs)
+	for (i, xⁱ) in enumerate(xs)
+		hⁱ = true_w' * [1, xⁱ]
+		# ys[i] = hⁱ + rand(Normal(0, sqrt(true_σ²)))
+		ys[i] = rand() < logistic(hⁱ)
+	end
+
+	x_centre = -true_w[1]/true_w[2]
+
+	plt = plot(xs, zeros(length(xs)), st=:scatter, framestyle=:origin, labels=L"x", color=:black, ms=5, markershape=:x, xlabel=L"x", ylim=[-0.1, 1.2], ylabel=L"y", legend=:outerbottom)
+	# true_w =[0, 1]
+	plot!(plt, min(-5 + x_centre, -5):0.01:max(x_centre +5, 5), (x) -> logistic(true_w[1] + true_w[2]*x), lw=1.5, label=L"\sigma(x)", title="Probabilistic model for logistic regression")
+	plot!(plt, min(-5 + x_centre, -5):0.01:max(x_centre +5, 5), (x) -> 1-logistic(true_w[1] + true_w[2]*x),lc=1, lw=1.5, label=L"1-\sigma(x)")
+
+	xis = xs
+
+	anim = @animate for i in 1:length(xis)
+		x = xis[i]
+		scatter!(plt, [xis[i]],[ys[i]], markershape = :circle, label="", c=ys[i]+1, markersize=5)
+		vline!(plt, [x], ls=:dash, lc=:gray, lw=0.2, label="")
+		plt2 = plot(Bernoulli(logistic(true_w[1] + true_w[2]*x)), st=:bar, yticks=(0:1, ["negative", "positive"]), xlim=[0,1.01], orientation=:h, yflip=true, label="", title=L"p(y|{x})", color=1:2)
+		plot(plt, plt2, layout=grid(2, 1, heights=[0.85, 0.15]), size=(700,500))
+	end
+	# ys = xs * true_w[2] .+ true_w[1] + randn(length(xs)) * sqrt(σ²0)
+	
+	# 	x = xis[i]
+	# 	
+	# end
+
+	gif(anim; fps=4)
+end
+
+# ╔═╡ 68d6c0bd-0d71-48ba-97c2-53681fdc6e61
+
+md"""
+
+## Probabilistic softmax regression
+
+> ```math
+> \large
+> 
+> p(y^{(i)}|\mathbf{W},\mathbf{x}^{(i)}) = \texttt{Categorical}(\boldsymbol\sigma^{(i)}) =\begin{cases}\sigma^{(i)}_1 & y^{(i)} =1
+> \\
+> \sigma^{(i)}_2 & y^{(i)} =2 \\
+> \vdots & \vdots \\
+> \sigma_C^{(i)} & y^{(i)} = C\end{cases}
+> ```
+> * ``y^{(i)}`` is a Categorical distributed with parameter $\boldsymbol\sigma^{(i)}=\texttt{softmax}(\mathbf{W} \mathbf{x}^{(i)})$ (bias ``\mathbf{b}`` is rolled into ``\mathbf{W}`` by adding dummy ones)
+"""
+
+# ╔═╡ 00fb253a-ad48-4d28-af17-5cdbc2cb81cb
+let
+	gr()
+	# logistic = σ
+	Random.seed!(12345)
+	n_obs = 35
+
+	xs = sort(rand(n_obs) * 10 .- 5)
+	# true_W = randn(3, 1) * 3
+	# true_b = [0, -10, 1]
+
+	
+	true_W = [-2, 0, 2]
+	true_b =[0,3,0]
+	σs = softmax(true_W * xs' .+ true_b)
+	ys = rand.([Categorical(p[:]) for p in eachcol(σs)])
+	x_centre = 0
+	plt = plot(xs, zeros(length(xs)), st=:scatter, framestyle=:origin, labels=L"x", color=:black, ms=5, markershape=:x, xlabel=L"x", ylim=[-0.1, 1.2], ylabel=L"p(y|x)", legend=:outerbottom)
+	# # true_w =[0, 1]
+	for c in 1:3
+		plot!(plt, min(-6 + x_centre, -5):0.01:max(x_centre +6, 5), (x) -> softmax(true_b + true_W * x)[c], lw=2, label="softmax: " * L"p(y=%$(c)|x)=\sigma_{%$(c)}(x)", title="Probabilistic model for softmax regression", legendfontsize=10)
+	end
+
+	xis = xs
+	anim = @animate for i in 1:length(xis)
+		x = xis[i]
+		scatter!(plt, [xis[i]],[(ys[i] -1) *0.5], markershape = :circle, label="", c=ys[i]+1, markersize=5)
+		vline!(plt, [x], ls=:dash, lw=0.2, lc=:gray, label="")
+		plt2 = plot(Categorical(σs[:, i]), st=:bar, yticks=(1:3, [L"y= 1", L"y= 2", L"y= 3"]), xlim=[0,1.01], orientation=:h, yflip=true, label="", color=[2,3,4], title=L"p(y|{x})")
+		plot(plt, plt2, layout=grid(2, 1, heights=[0.8, 0.2]),size=(700,500))
+	end
+	gif(anim; fps=3)
+end
+
+# ╔═╡ 84eec855-d97b-4dc9-8388-028547cdff89
+md"""
+
+## Recall: the one-liner trick 
+
+#### -- categorical distribution in one--line
+
+```math
+\large
+\begin{align}
+P(Y ) =\begin{cases}\sigma_1 & y= 1 \\ \sigma_2 & y=2 \\
+\vdots \\
+
+\sigma_K & y=K
+\end{cases}\;\;\Longleftrightarrow \;\; P(Y=y ) = \Large \prod_{k=1}^K\, \sigma_k^{\mathbb{1}(y = k)}
+\end{align}
+```
+
+* ##### _indicator function_: ``\mathbb{1}(\texttt{true}) = 1``, ``\mathbb{1}(\texttt{false}) = 0``
+
+
+
+"""
+
+# ╔═╡ 0c44c37a-2291-4bde-990a-78b53e162b2a
+Foldable("Example", md"""
+
+##### for ``K=6``, we have
+
+```math
+\large
+P(Y=y) = \theta_1^{\mathbb{1}(y =1)} \cdot \theta_2^{\mathbb{1}(y =2)}  \cdot \theta_3^{\mathbb{1}(y =3)} \cdot \theta_4^{\mathbb{1}(y =4)} \cdot \theta_5^{\mathbb{1}(y =5)}\cdot \theta_6^{\mathbb{1}(y =6)}
+```
+
+
+* ##### to verify it, *e.g.* ``y= 2``
+
+```math
+\large
+\begin{align}
+P(Y=2) &= \theta_1^{\mathbb{1}(2 =1)} \cdot \theta_2^{\mathbb{1}(2 =2)}  \cdot \theta_3^{\mathbb{1}(2 =3)} \cdot \theta_4^{\mathbb{1}(2 =4)} \cdot \theta_5^{\mathbb{1}(2 =5)}\cdot \theta_6^{\mathbb{1}(2 =6)}\\
+
+&= \theta_1^{0} \cdot \theta_2^{1}  \cdot \theta_3^{0} \cdot \theta_4^{0} \cdot \theta_5^{0}\cdot \theta_6^{0} \\
+&= \theta_2
+\end{align}
+```
+
+""")
+
+# ╔═╡ 3bf0cab8-de5d-4a58-b92e-c530aeca7547
+md"""
+
+## Cross-entropy loss
+
+
+#### Probabilistic softmax regression
+
+> ```math
+> \large
+> \begin{align}
+> p(y^{(i)}|\mathbf{W}, \mathbf{x}^{(i)}) &= \texttt{Categorical}(\boldsymbol\sigma^{(i)}) =\begin{cases}\sigma^{(i)}_1 & y^{(i)} =1
+> \\
+> \sigma^{(i)}_2 & y^{(i)} =2 \\
+> \vdots & \vdots \\
+> \sigma_C^{(i)} & y^{(i)} = C\end{cases}\\
+> &=\prod_{c=1}^C \left (\sigma^{(i)}_c\right )^{\mathbb{1}(y^{(i)}=c)}
+> \end{align}
+> ```
+
+#### The log-likelihood is 
+
+```math
+\large 
+\begin{align}
+\ln p(y^{(i)}|\mathbf{W}, \mathbf{x}^{(i)}) &= \ln \prod_{c=1}^C \left(\sigma_c^{(i)}\right)^{\mathbb{1}(y^{(i)} = c)} = \sum_{c=1}^C \mathbb{1}(y^{(i)} = c) \ln\sigma_c^{(i)}\\
+&=\sum_{c=1}^C \mathbb{1}(y^{(i)} = c) \ln\sigma_c^{(i)}
+\end{align}
+```
+
+#### The negative log-likelihood is our loss
+
+```math
+\large
+\begin{align}
+\mathcal{L}_{CE}(\mathbf{W}) &= -\ln p(y^{(i)}|\mathbf{W}, \mathbf{x}^{(i)})\\
+&= - \sum_{c=1}^C \mathbb{1}(y^{(i)} = c) \ln\sigma_c^{(i)}\\
+&= - \sum_{c=1}^C \mathbb{1}(y^{(i)} = c) \ln\hat{y}_c^{(i)}
+\end{align}
+```
+
+* ##### where ``\hat{y}_c = \sigma_c``, *i.e.* softmax output
+* ##### this is known as `cross entropy loss`
+"""
+
+# ╔═╡ 9cbd6dc5-424c-44f9-b8b6-895f26e169b7
+md"""
+
+## Relationship with binary CE loss
+
+#### Binary CE loss is 
+$$\large 
+\begin{align}\mathcal{L}_{CE}(y, \hat{y}) 
+&=\begin{cases}- \ln \hat{y} & \text{if } y = 1\\  - \ln (1-\hat{y}) & \text{if } y = 0\end{cases}\end{align}$$
+  
+- ``\hat{y} = \sigma = \hat{P}(y=1|\mathbf{x})`` is the predicted probability
+
+
+#### Multiclass CE loss is just its generalisation
+
+$$\large
+\begin{align}
+\mathcal{L}_{CE}(\mathbf{y}; \hat{\mathbf{y}}) 
+  &=-\sum_{c=1}^C \mathbb{1}(y = c) \ln\hat{y}_j
+\\
+&= \begin{cases}- \ln \hat{y}_1 & \text{if } y = 1\\  - \ln \hat{y}_2 & \text{if } y = 2 \\ \vdots & \vdots \\- \ln \hat{y}_C & \text{if }y = C\end{cases}
+\end{align}$$
+
+
+
+"""
+
+# ╔═╡ 825161ce-ebc0-4b3a-a6db-c0e3fd8d0bb7
+md"""
+## Aside: one hot encoding 
+
+#### For the categorical targets
+
+```math
+\Large y \in \{1,2,\ldots, C\}
+```
+
+#### The (*one-hot-encoding*)  vector (``{\mathbf{y}}`` is a ``C\times 1`` vector!)
+
+```math
+\large
+{\mathbf{y}} = \begin{bmatrix}\mathbb{1}(y =1)\\ \mathbb{1}(y =2)\\ \vdots\\ \mathbb{1}(y =C)\end{bmatrix}
+```
+
+
+"""
+
+# ╔═╡ e38a2df0-7430-454e-bf59-525166b4b8c3
+md"""
+#### Examples
+"""
+
+# ╔═╡ 37a343a7-e0a1-4229-9125-999cb1551323
+ThreeColumn(
+md"""
+##### label ``y=1``
+
+
+```math
+\large
+{\mathbf{y}}_{\text{class 1}} = \begin{bmatrix} 
+1 \\
+0 \\
+0
+\end{bmatrix}
+```
+
+""",
+
+md"""
+
+##### label ``y=2``
+
+```math
+\large
+{\mathbf{y}}_{\text{class 2}} = \begin{bmatrix} 
+0 \\
+1 \\
+0
+\end{bmatrix}
+```
+
+""",
+
+	md"""
+##### label ``y=3``
+
+
+```math
+\large
+{\mathbf{y}}_{\text{class 3}} = \begin{bmatrix} 
+0 \\
+0 \\
+1
+\end{bmatrix}
+```
+
+
+	"""
+)
+
+# ╔═╡ 12871097-913a-489c-a5f8-9ed73be2dda2
+# TwoColumn(md"""
+# **For example**, ``y \in \{\texttt{seal}, \texttt{panda}, \texttt{duck}\}``,
+
+
+# Encode ``y=\texttt{seal}`` with
+
+
+# ```math
+# \large
+# {\mathbf{y}}_{\texttt{seal}} = \begin{bmatrix} 
+# 1 &
+# 0 &
+# 0
+# \end{bmatrix}^\top
+# ```
+# * ``{\mathbf{y}}_{\text{seal}; 1} = 1``: the one-vs-all target
+
+
+# Encode ``y=\texttt{panda}`` with
+
+
+# ```math
+# \large
+# {\mathbf{y}}_{\texttt{panda}} = \begin{bmatrix} 
+# 0 &
+# 1 &
+# 0
+# \end{bmatrix}^\top
+# ```
+
+
+
+# Encode ``y=\texttt{duck}`` with
+
+
+# ```math
+# \large
+# {\mathbf{y}}_{\texttt{duck}} = \begin{bmatrix} 
+# 0 &
+# 0 &
+# 1
+# \end{bmatrix}^\top
+# ```
+
+# """, 
+	
+# 	html"<center><img src='https://d33wubrfki0l68.cloudfront.net/8850c924730b56bbbe7955fd6593fd628249ecff/275c5/images/multiclass-classification.png
+# ' width = '400' /></center>")
+
+# ╔═╡ a49bcf15-a3bd-482b-a2a1-186a20aa9e1f
+md"""
+
+
+## Cross entropy loss (vectorised)
+#### -- with one-hot encoded ``\mathbf{y}``
+
+```math
+\Large
+\begin{align}
+\mathcal{L}^{(i)}_{CE}(\mathbf{y}^{(i)}, \hat{\mathbf{y}}^{(i)}) &= -\sum_{j=1}^C \mathbb{1}(y^{(i)} = j) \ln\hat{y}_j^{(i)}\\
+&=-{\mathbf{y}^{(i)}}^\top \ln\hat{\mathbf{y}}^{(i)}
+\end{align}
+```
+
+
+* where ``\mathbf{y}`` is the one hot encode vector
+
+$\large
+{\mathbf{y}} = \begin{bmatrix}\mathbb{1}(y =1)\\ \mathbb{1}(y =2)\\ \vdots\\ \mathbb{1}(y =C)\end{bmatrix},\;\; \hat{\mathbf{y}}={\boldsymbol{\sigma}} = \begin{bmatrix}\sigma_1\\ \sigma_2\\ \vdots\\ \sigma_C\end{bmatrix}$
+"""
+
+# ╔═╡ c9d9aca3-91c5-4c72-8c3a-613d9a32d86b
+md"""
+
+## Gradient of softmax regression
+
+
+#### The *gradient* for _softmax regression_ is
+
+
+```math
+\Large
+\nabla \mathcal{L}^{(i)}(\mathbf{W})  = -  \underbrace{(\mathbf{y}^{(i)} - \hat{\mathbf{y}}^{(i)})}_{\text{pred. error for }i} \cdot (\mathbf{x}^{(i)})^\top
+```
+* ##### ``\mathbf{y}``: one-hot vector
+* ##### ``\hat{\mathbf{y}}``: softmax output vector
+
+#### The _gradient_ follows the same pattern 
+
+> #### `grad = error` ``\times`` `x`
+
+* ##### which is the same as linear/logistic regressions
+"""
+
+# ╔═╡ 0d38feef-ea74-4f99-8064-8fa7a6d4d6ae
+md"""
+
+## Gradient of softmax regression
+
+
+#### The *gradient* for _softmax regression_ is
+
+
+```math
+\Large
+\nabla \mathcal{L}^{(i)}(\mathbf{W})  = -  \underbrace{(\mathbf{y}^{(i)} - \hat{\mathbf{y}}^{(i)})}_{\text{pred. error for }i} \cdot (\mathbf{x}^{(i)})^\top
+```
+* #### ``\mathbf{y}``: one-hot vector
+* #### ``\hat{\mathbf{y}}``: softmax output vector
+
+##### Note the gradient is ``C\times m`` which is the same as ``\mathbf{W}_{C\times m}``
+
+```math
+\Large
+\nabla_{\mathbf{W}} \mathcal{L}^{(i)}=-\boxed{(\mathbf{y}^{(i)} - \hat{\mathbf{y}}^{(i)})}_{C\times 1} \cdot \boxed{(\mathbf{x}^{(i)})^\top}_{1\times m}
+```
+
+"""
+
+# ╔═╡ 67dbd8c3-3200-4a6c-b8ca-bf17aff233e4
+md"""
+
+## Vectorised batch gradient
+
+
+#### The batch **gradient** for _softmax regression_ is
+
+```math
+\Large
+\begin{align}
+\nabla_{\mathbf{W}} \mathcal{L}   &= \frac{1}{n}\sum_{i=1}^n\nabla_{\mathbf{W}} \mathcal{L}^{(i)}  = - \frac{1}{n}\sum_{i=1}^n {(\mathbf{y}^{(i)} - \hat{\mathbf{y}}^{(i)})} \cdot (\mathbf{x}^{(i)})^\top \\
+&=-\frac{1}{n} (\mathbf{Y} -\hat{\mathbf{Y}})^\top\cdot {\mathbf{X}}
+\end{align}
+```
+* ``\mathbf{Y}_{n\times C}``: one-hot vector of the full batch
+* ``\hat{\mathbf{Y}}_{n\times C}``: softmax outputs of the full batch
+
+* ##### note again the dimension matches, *i.e.* ``C\times m`` is the same as ``\mathbf{W}_{C\times m}``
+
+```math
+\Large
+\boxed{(\mathbf{Y} -\hat{\mathbf{Y}})^\top}_{C\times n}\cdot \boxed{\mathbf{X}}_{n\times m}
+```
+"""
+
+# ╔═╡ 80cdc39a-86be-45c1-8cde-5389c99ad354
+aside(tip(md"""
+
+Assume ``\mathbf{x}_i`` is the ``i``th-row of ``\mathbf{X}_{n\times m}`` , then
+```math
+\sum_{i=1}^n \mathbf{x}_i\mathbf{x}_i^\top =\mathbf{X}^\top\mathbf{X}
+```
+
+Similarly, assume ``\mathbf{Y}_{(n\times l)}`` and ``\mathbf{y}_{i}`` is the ``i``th-row, then
+
+```math
+\sum_{i=1}^n \mathbf{y}_i\mathbf{x}_i^\top =\mathbf{Y}^\top\mathbf{X}
+```
+
+"""))
+
+# ╔═╡ 8986d0dc-fb2e-43dc-b61a-f38ce1f94d1a
+# md"""
+
+# ## CE loss summary
+
+
+# The total loss over all training data is
+
+# $$
+# \large
+# \begin{align}
+# L(\{\mathbf{y}^{(i)}\}; \{\hat{\mathbf{y}}^{(i)}\}) &= - \sum_{i=1}^n\sum_{j=1}^C  {y}_j^{(i)} \ln \underbrace{\hat{P}(y^{(i)} =j| \mathbf{x}^{(i)})}_{\text{softmax: } \hat{\mathbf{y}}_j}\\
+# &=- \sum_{i=1}^n\sum_{j=1}^C  {y}_j^{(i)} \ln \hat{{y}}_j^{(i)}
+# \end{align}$$
+
+# - ``\mathbf{y}`` is the one-hot encoded label
+# - ``\hat{\mathbf{y}}`` is the softmax output
+
+# """
+
+# ╔═╡ a1e0cfec-d1ad-4692-8125-c109819e3c75
+# md"""
+
+# ## One-vs-all implementation
+
+
+# * ##### apply `logistic` function **individually** to squeeze the output to ``(0,1)``
+
+# ```math
+# \Large
+# \sigma_c = \sigma \circ h_c(\mathbf{x}) = \sigma(\mathbf{w}_c^\top \mathbf{x} + b_c)
+# ```
+# """
+
+# ╔═╡ 71183436-0231-4e89-af31-9fb6ae9996f2
+# html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/multiclass4.svg
+# ' height = '350' /></center>"	
+
+# ╔═╡ ade61f89-509e-4068-8fba-e5f95cdc13a2
+# md"""
+
+# ## One-vs-all implementation
+
+
+# #### In *matrix notation*
+
+# ```math
+# \Large
+# \boldsymbol{\sigma} =\sigma.(\mathbf{W}_{C\times m}\mathbf{x}_{m\times 1} +\mathbf{b}_{C\times 1})
+# ```
+
+# """
+
+# ╔═╡ 44c19857-0051-4f27-b9f0-5ad7d81d9760
+# html"<center><img src='https://leo.host.cs.st-andrews.ac.uk/figs/CS5914/multiclass5.svg
+# ' width = '900' /></center>"	
+
+# ╔═╡ 05f4be36-fd3e-4ffe-8049-eeeee4af03b5
+# md"""
+
+# ## One-vs-all loss
+
+# The loss for the ``i``-th observation is the sum of individual ``C`` cross entropy losses
+
+
+# ```math
+# \large 
+# \mathcal{L}^{(i)}(\mathbf{W}, \mathbf{b}) = \sum_{c=1}^C \underbrace{-{\tilde{y}_c^{(i)}} \ln \sigma^{(i)}_c- (1- \tilde{y}^{(i)}_c) \ln (1-\sigma_c^{(i)})}_{\text{CE for class }c}
+# ```
+
+
+# The total losses therefore is 
+
+
+# ```math
+# \large 
+# \begin{align}
+# \mathcal{L}(\mathbf{W}, \mathbf{b}) &= \sum_{i=1}^n \mathcal{L}^{(i)}(\mathbf{W}, \mathbf{b}) \\
+# &=\sum_{i=1}^n\sum_{c=1}^C{-{\tilde{y}_c^{(i)}} \ln \sigma^{(i)}_c- (1- \tilde{y}^{(i)}_c) \ln (1-\sigma_c^{(i)})}
+# \end{align}
+# ```
+# """
+
+# ╔═╡ e769fb23-7852-473f-bcd6-ae971f0ae66c
+# md"""
+# ## Learning 
+
+
+# #### Gradient descent
+
+# * ##### the gradients are almost the same as binary logistic regression
+#   * ``C`` independent logistic regression
+#   * except the parameters now are a **matrix**
+#   * it is left as an exercise
+# """
+
+# ╔═╡ 514b9328-6987-4436-b460-bfe9438c3ec6
+# md"""
+
+# ## One-vs-all prediction
+
+
+# > #### *Prediction*: given ``\mathbf{x}_{test}``, what is its label ``y_{test} \in \{1, \ldots, C\}``
+
+
+# #### We can simply pick the most **confident** class:
+
+# ```math
+# \Large
+# \begin{align}
+# \hat{y} &= \arg\max_{c=1\ldots C} P(\tilde{y} =c|\mathbf{W}, \mathbf{b})_{\text{one vs all}}\\
+# &=\arg\max_{c=1\ldots C} \sigma_c
+# \end{align}
+# ```
+
+# """
+
+# ╔═╡ b20dd0fb-ebae-4276-8f0b-401bc40c16ee
+md"""
+
+## A case study: Palmer Penguins dataset
+"""
+
+# ╔═╡ 0c4008d0-b457-41b4-a578-b5a63c72a5b7
+html"<center><img src='https://allisonhorst.github.io/palmerpenguins/reference/figures/lter_penguins.png
+' width = '600' /></center>"	
+
+# ╔═╡ 652bfbc5-769a-4f25-af45-b3337a32b368
+first(df, 5);
+
+# ╔═╡ a365490e-a4d9-4af0-835d-25b60327308e
+md"""
+
+## Dataset -- multi-class classification
+
+"""
+
+# ╔═╡ 2799fba9-8500-432f-9b2e-c164476dcb33
+TwoColumn(md"""
+\
+\
+
+#### The targets: ``y`` the *species* , *i.e.* 
+
+$\large y \in \{\text{Adelie}, \text{Chinstrap}, \text{Gentoo}\}$
+
+""", html"<center><img src='https://allisonhorst.github.io/palmerpenguins/reference/figures/culmen_depth.png
+' width = '350' /></center>"	)
+
+# ╔═╡ a1144fd3-45ba-47c1-a1f1-3ca7e53574a0
+md"""
+
+## Demonstration -- softmax regression
+
+"""
+
+# ╔═╡ b5585816-fd8c-45ca-9b90-4b8a5a3209ad
+md"""
+Add class ``c``'s decision contour: $(@bind sf_c Select(1:1:3));
+Add the total decision boundary: $(@bind add_sf CheckBox(default=false))
+"""
+
+# ╔═╡ 7b70dcf0-affc-408a-8d27-5cfba8df2ca4
+# let
+# 	gr()
+# 	cs = 1:3
+# 	plt_predicted = @df df_stand scatter(:bill_length_mm, :bill_depth_mm, group =:species, framestyle=:origins,  xlabel="bill length (mm)", ylabel="bill depth (mm)", ratio=1,alpha=0.8, legend=false, size=(500,500))
+
+# 	# if true
+# 		plot!(-3:0.02:8, -3:0.02:8, (x,y) -> model([x, y]) |> argmax, st=:heatmap, alpha=0.25, xlim = (-3, 8), c=cs, ylim=(-3, 8), colorbar=false)
+# 	# else
+# 		# plot!(-2.5:0.02:2.9, -2.5:0.02:2.7, (x,y) -> model([x, y])[sf_c], st=:contour, alpha=1, levels=8, color=:jet, colorbar=false)
+# 	# end
+# end
+
+# ╔═╡ 71e2c0f5-3cbe-485b-9191-f9193ff0fd87
+# function stoc(s)
+# 	if s == "Adelie"
+# 		return :orange
+# 	elseif s == "Gentoo"
+# 		return :blue
+# 	else
+# 		return :purple
+# 	end
+# end
+
+# ╔═╡ 3be8bb30-a8a9-4cbd-af8a-eca42045d86c
+# let
+# 	plot(losses; xaxis=(:identity, "Epoch"),
+# 	    yaxis="loss", label="per batch", lw=0.5)
+# 	n = length(train_loader)
+# 	plot!(n:n:length(losses), mean.(Iterators.partition(losses, n)),
+# 	    label="epoch mean", lw=1.5, title="Softmax regression loss curve")
+# end
+
+# ╔═╡ 0afd7c8d-c7dd-4e31-ba9a-a6d8fa60a39c
+md"""
+
+## Live coding
+
+"""
+
+# ╔═╡ c377fb2e-3d71-448a-97a9-efdac0fcdb97
+md"Dataset: `XX`, `Y`"
+
+# ╔═╡ b6cd5910-4cee-4ac5-81b8-a3bf75da15f0
+function soft_max(x)  # the input can be a matrix; apply softmax to each column
+	ex = exp.(x .- maximum(x, dims=1))
+	ex ./ sum(ex, dims = 1)
+end
+
+# ╔═╡ 27abf8f6-b06a-460c-8519-351cfcb09aeb
+ThreeColumn(md"
+
+``\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\mathbf{z}=``$(latexify_md([-1, 0, 1]))
+
+", md"
+``\;\;\;\;\;\;\;\;\exp.{(\mathbf{z})}=``$(latexify_md(round.(exp.([-1, 0, 1]); digits=2)))
+
+
+", md"
+``\;\;\;\;\;\;\;\;\text{softmax}(\mathbf{z})=``$(latexify_md(round.(soft_max([-1, 0, 1]);digits=2)))
+
+
+")
+
+# ╔═╡ 0be915c9-a24c-41ff-886f-f9553171d3af
+ThreeColumn(md"
+
+``\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\;\mathbf{z} - 1 =``$(latexify_md([-1-1, 0-1, 1-1]))
+
+", md"
+``\;\;\;\;\;\;\;\;\exp.{(\mathbf{z})}=``$(latexify_md(round.(exp.([-2, -1, 0]); digits=2)))
+
+
+", md"
+``\;\;\;\;\;\;\;\;\text{softmax}(\mathbf{z})=``$(latexify_md(round.(soft_max([-2, -1, 0]);digits=2)))
+
+
+")
+
+# ╔═╡ 56e7ec6e-917c-407b-bc7e-6f07e511ad8b
+ThreeColumn(
+	let
+	gr()
+	# logistic = σ
+	zs = (true_b + true_W * x_sfmx)
+
+	# expzs = exp.(zs)
+
+	# ss = expzs ./ sum(expzs)
+
+	plt1 = plot(zs, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", size=(300,300), xlabel="", title="input: "*L"\mathbf{z}", ylim =(-12, 12))
+	top_downs = [z > 0 ? :bottom : :top for z in zs]
+	
+	annotate!(1:3, zs, [text(L"z_1", top_downs[1]), text(L"z_2", top_downs[2]), text(L"z_3", top_downs[3])])
+	end
+,
+
+	
+md"""
+
+\
+\
+\
+\
+
+#### $$\xRightarrow[]{\text{softmax}}$$
+
+"""
+	,
+let	
+	ss= soft_max((true_b + true_W * x_sfmx))
+	plt3 = plot(ss, st=:bar, c=1:3, framestyle=:zerolines, xticks=false, xlim =(0.5,3.5), yaxis=false, bar_width=0.2, label="", size=(300,300), ratio=1, xlabel="", title="softmax output: "*L"\mathbf{\sigma}")
+	annotate!(1:3, ss, [text(L"\sigma_1", :bottom), text(L"\sigma_2", :bottom), text(L"\sigma_3", :bottom)], ylim =(0,1))
+	plt3
+end
+)
+
+# ╔═╡ a3890441-6f25-4c9e-8d7c-2b2b88829094
+X_2d, Y_2d, WW = let
+	# ww = [-1 1 1; -1 -1 1; -1 -1 -1]
+	Random.seed!(123)
+	xs = randn(20, 2)/2 .+ [2 2]
+	xs = [xs; randn(20, 2)/2 .+ [-2 2]; randn(20, 2)/2 .+ [0 -2]]
+	Xs = [ones(size(xs)[1]) xs]
+	ys = repeat(1:3, inner= 20)
+	Ys = Matrix(I, 3, 3)[ys,:]
+	plot(xs[:,1], xs[:, 2], st=:scatter, c= ys, label="")
+	γ = 0.5
+	θ = vec(zeros(3,3)/5)
+	for _ in 1:200
+		loss, g  = Zygote.withgradient(θ) do θ
+			W = reshape(θ, 3, 3)
+			zs = W * Xs'
+			Y_preds = soft_max(zs)'
+			- sum(Ys .*  log.(Y_preds))/size(Xs)[1] 
+		end 
+		θ = θ - γ *  g[1]
+	end
+
+	xs, ys, reshape(θ,3,3)
+end;
+
+# ╔═╡ e7bb2f2b-99e9-45a8-9bca-ec806e80b359
+let
+	plotly()
+	plt1 = plot(X_2d[:, 1], X_2d[:, 2], zeros(size(X_2d)[1]) ,st=:scatter, c= Y_2d, label="", title="z= wᵀx", ms=2)
+
+	for c in 1:3
+		plot!(-3:1:3, -3:1:3.0, (x, y) -> WW[c, 2:end]' * [x, y] + WW[c, 1], st=:surface, c=c, alpha=0.5, colorbar=false)
+	end
+
+	# x0 = [-2.5, -2.5]
+	# y0 = WW * [1, x0...]
+
+	# xx0 = [x0..., 0]
+	# ts = 0:0.1:1.0
+	# for c in 1: 3
+	# 	yy0 = [x0..., y0[c]]
+	# 	xys = ts' .* xx0 .+ (1 .- ts)' .* yy0  
+	# 	path3d!(xys[1,:], xys[2,:], xys[3,:], lw=2, lc=c,  label="")
+	# end
+	plot!(-3:1:3, -3:1:3, (x, y) -> 0, st=:surface, c=:gray, alpha=0.5)
+
+
+
+	plt2 = plot(X_2d[:, 1], X_2d[:, 2], zeros(size(X_2d)[1]) ,st=:scatter, c= Y_2d, label="", title="softmax(z)", ms=2)
+
+	for c in 1:3
+		plot!(-3:0.1:3, -3:0.1:3.0, (x, y) -> softmax(WW * [1, x, y])[c], st=:surface, c=c, alpha=0.5, colorbar=false)
+	end
+
+	plot!(-3:1:3, -3:1:3, (x, y) -> 0, st=:surface, c=:gray, alpha=0.5)
+
+	plot(plt1, plt2)
+end
+
+# ╔═╡ 4844845d-5f3e-44f5-a873-0d7de90d4ab1
+XX, Y = let
+	Random.seed!(234)
+	trueW = randn(3, 3) * 3
+	Xs = randn(300, 2) * 6 .- 3
+	ys = [sample(1:3, Weights(w)) for w in eachcol(soft_max(trueW[:, 2:end] * Xs' .+ trueW[:, 1]))]
+
+	Xs, ys, trueW
+end;
+
+# ╔═╡ 8038df9f-fce9-4fc7-af9e-91c318772043
+XX, Y
+
+# ╔═╡ 2e8b172a-3ddf-4a3e-9d37-88f9c96fc3f4
+let
+	XX_ = [ones(size(XX)[1]) XX]
+	W = zeros(3,3)
+	YY = Matrix(I, 3, 3)[Y,:]
+
+
+	# logsoftmax(W * XX')
+	gW = Zygote.gradient(W) do WW
+		logz = - log.(soft_max(WW * XX_')')
+		sum(logz .* YY) / size(XX_)[1]
+	end
+
+	YY_ = soft_max(W * XX_')'
+
+	gW, (YY_ - YY)' * XX_ / size(XX_)[1]
+end;
+
+# ╔═╡ 2f08cdad-667e-40b2-8a40-55641dc85933
+function produce_gif(plts, fps)
+	# gr()
+	anim = Animation()
+
+	[frame(anim, p) for p in plts]
+
+	gif(anim; fps=fps)
+end;
+
+# ╔═╡ fcb56737-1c2e-429f-82ec-6ca0add4d556
+begin
+
+	function produce_plt(W0, iter, XX, loss)
+		gr()
+		plt = plot()
+		plot!(XX[:, 1], XX[:, 2], st=:scatter, c= Y, label="")
+		xs = range(extrema(XX[:,1])..., 100)
+		ys = range(extrema(XX[:,2])..., 100)
+		plot!(xs, ys, (x, y) -> argmax(W0 * [1, x, y]), st=:heatmap, alpha=0.3, c=1:3,colorbar=false, title="Iteration $(iter); loss: $(round(loss; digits=2))")
+		return plt
+	end
+
+end;
+
+# ╔═╡ 1e020a5a-65b8-43d5-8f58-3a29e58da522
+W0, plts, losses_ = let
+	Random.seed!(2345)
+	XX_ = [ones(size(XX)[1]) XX]
+	YY_ = Matrix(I, 3,3)[Y,:]
+	W0 = randn(3, 3)
+	plts = [produce_plt(W0, 0, XX, Inf)]
+	losses = []
+	γ = 0.05
+	# code here
+	for iter in 1:50
+		zs = W0 * XX_'
+		Y_preds = soft_max(zs)'
+		gW = (Y_preds - YY_)' * XX_ /size(XX_)[1]
+		W0 -= γ * gW
+		loss = - sum(YY_ .* log.(Y_preds))/size(XX_)[1]
+		push!(losses, loss)
+		push!(plts, produce_plt(W0, iter, XX, loss))
+	# # XX_
+	end
+
+	# Y_preds = soft_max(zs)
+	# gradW = 
+
+	W0, plts, losses
+end
+
+# ╔═╡ b183816c-4496-45f5-8710-39b1ca84eed7
+produce_plt(W0, 0, XX, Inf)
+
+# ╔═╡ 1edf1a7b-616b-4801-bc81-a1bbd8df8854
+produce_gif(plts, 3)
+
+# ╔═╡ 96864302-2257-43a4-801b-150423e64047
+begin
+	gr()
+plt1 = @df df scatter(:bill_length_mm, :flipper_length_mm, group =:species, framestyle=:origins,  xlabel="flipper length (mm)", ylabel="body mass (g)");
+end;
+
+# ╔═╡ 5015bc1d-3b84-43be-b1c8-76953f362eab
+begin
+	gr()
+	plt2 = @df df scatter(:bill_length_mm, :bill_depth_mm, group =:species, framestyle=:origins,  xlabel="bill length (mm)", ylabel="bill depth (mm)");
+end;
+
+# ╔═╡ 8bbdc4e2-5433-4e71-8922-c8fc435ce420
+TwoColumn(md"""
+\
+\
+\
+\
+
+We focus on two predictors: 
+
+* bill length and bill depth and 
+* classify the species
+""", 
+begin
+	gr()
+	plot(plt2, size=(350,350))
+end
+)
+
+# ╔═╡ 0c5e681c-ba14-4657-b376-71b1b05b1c6f
+md"""
+
+
+# Softmax regression: gradient derivation*
+"""
+
+# ╔═╡ e2b2e51c-cb19-42d4-b129-00f7d58d3f0d
+md"""
+
+## Gradient of softmax regression
+
+#### In this section, we derive the *gradient*
+
+```math
+\large
+\nabla_{\mathbf{W}} \mathcal{L}^{(i)} = -  {(\mathbf{y}^{(i)} - \hat{\mathbf{y}}^{(i)})} \cdot (\mathbf{x}^{(i)})^\top
+```
+* #### ``\mathbf{y}``: one-hot vector
+* #### ``\hat{\mathbf{y}}``: softmax output vector
+
+* the gradient dimension matches: ``C\times m`` which is the same as ``\mathbf{W}``
+
+```math
+\large
+-\boxed{(\mathbf{y}^{(i)} - \hat{\mathbf{y}}^{(i)})}_{C\times 1} \cdot \boxed{(\mathbf{x}^{(i)})^\top}_{1\times m}
+```
+
+"""
+
+# ╔═╡ 67b9bcc8-5c3e-4b9b-9a65-fae332053f24
+md"""
+
+## Forward pass 
+
+$$\large \begin{align}
+\mathcal{L}^{(i)}(\mathbf{y}; \hat{\mathbf{y}}) 
+&=- \sum_{j=1}^C  {y}_j \ln \hat{{y}}_j
+\end{align}$$
+"""
+
+# ╔═╡ 0d191d54-f36b-400c-8a74-f13a221827ad
+show_img("ce_loss_forward1.svg", w=600)
+
+# ╔═╡ f2647459-1721-45ed-8150-3513c0427b3d
+md"""
+
+## Gradient derivation
+
+
+Again, consider ``i``-th observation only, 
+
+##### (``i`` index is omit here for cleaner presentation)
+
+$$\begin{align}
+\mathcal{L}^{(i)}(\mathbf{y}; \hat{\mathbf{y}}) 
+&=- \sum_{j=1}^C  {y}_j \ln \hat{{y}}_j\\
+&= - \sum_{j=1}^C  {y}_j \ln \frac{e^{z_j}}{\sum_{k=1}^C e^{z_k}}\tag{sub-in $\hat{y}_j$}
+\end{align}$$
+
+
+## Gradient derivation
+
+
+Again, consider ``i``-th observation only,
+
+$$\begin{align}
+\mathcal{L}^{(i)}(\mathbf{y}; \hat{\mathbf{y}}) 
+&=- \sum_{j=1}^C  {y}_j \ln \hat{{y}}_j\\
+&= - \sum_{j=1}^C  {y}_j \ln \frac{e^{z_j}}{\sum_{k=1}^C e^{z_k}}\tag{sub-in $\hat{y}_j$}\\
+&=-\sum_{j=1}^C  {y}_j \left \{\ln e^{z_j}-\ln \sum_{k=1}^C e^{z_k}\right \}\tag{$\ln\frac{a}{b} =\ln a-\ln b$} 
+\end{align}$$
+
+
+
+## Gradient derivation
+
+
+Again, consider ``i``-th observation only,
+
+$$\begin{align}
+\mathcal{L}^{(i)}(\mathbf{y}; \hat{\mathbf{y}}) 
+&=- \sum_{j=1}^C  {y}_j \ln \hat{{y}}_j\\
+&= - \sum_{j=1}^C  {y}_j \ln \frac{e^{z_j}}{\sum_{k=1}^C e^{z_k}}\tag{sub-in $\hat{y}_j$}\\
+&=-\sum_{j=1}^C  {y}_j \left \{\ln e^{z_j}-\ln \sum_{k=1}^C e^{z_k}\right \}\tag{$\ln\frac{a}{b} =\ln a-\ln b$} \\
+&=-\sum_{j=1}^C  {y}_j \left \{{z_j}-\ln \sum_{k=1}^C e^{z_k}\right \}\tag{$\ln a^b =b\ln a$} 
+\end{align}$$
+
+
+
+## Gradient derivation
+
+
+Again, consider ``i``-th observation only,
+
+$$\begin{align}
+\mathcal{L}^{(i)}(\mathbf{y}; \hat{\mathbf{y}}) 
+&=- \sum_{j=1}^C  {y}_j \ln \hat{{y}}_j\\
+&= - \sum_{j=1}^C  {y}_j \ln \frac{e^{z_j}}{\sum_{k=1}^C e^{z_k}}\tag{sub-in $\hat{y}_j$}\\
+&=-\sum_{j=1}^C  {y}_j \left \{\ln e^{z_j}-\ln \sum_{k=1}^C e^{z_k}\right \}\tag{$\ln\frac{a}{b} =\ln a-\ln b$} \\
+&=-\sum_{j=1}^C  {y}_j \left \{{z_j}-\ln \sum_{k=1}^C e^{z_k}\right \}\tag{$\ln a^b =b\ln a$} \\
+&= -\sum_{j=1}^C  {y}_j z_j + \underbrace{\sum_{j=1}^C  {y}_j}_{=1} \cdot \ln \sum_{k=1}^C e^{z_k}\tag{distribution law}
+\end{align}$$
+
+
+
+## Gradient derivation
+
+
+Again, consider ``i``-th observation only,
+
+$$\begin{align}
+\mathcal{L}^{(i)}(\mathbf{y}; \hat{\mathbf{y}}) 
+&=- \sum_{j=1}^C  {y}_j \ln \hat{{y}}_j\\
+&= - \sum_{j=1}^C  {y}_j \ln \frac{e^{z_j}}{\sum_{k=1}^C e^{z_k}}\tag{sub-in $\hat{y}_j$}\\
+&=-\sum_{j=1}^C  {y}_j \left \{\ln e^{z_j}-\ln \sum_{k=1}^C e^{z_k}\right \}\tag{$\ln\frac{a}{b} =\ln a-\ln b$} \\
+&=-\sum_{j=1}^C  {y}_j \left \{{z_j}-\ln \sum_{k=1}^C e^{z_k}\right \}\tag{$\ln a^b =b\ln a$} \\
+&= -\sum_{j=1}^C  {y}_j z_j + \underbrace{\sum_{j=1}^C  {y}_j}_{=1} \cdot \ln \sum_{k=1}^C e^{z_k}\tag{distribution law}\\
+&= -\sum_{j=1}^C  {y}_j z_j +  \ln \sum_{k=1}^C e^{z_k}
+\end{align}$$
+
+
+
+
+
+"""
+
+# ╔═╡ 3e72ec3b-9e3e-46a6-930d-8ae3f56e85ab
+md"""
+
+## What we have done
+
+##### -- define the cross entropy loss in terms of `logits` ``\mathbf{z}``, instead of the softmax output ``\hat{\mathbf{y}}``
+
+
+$$\Large\begin{align}
+\mathcal{L}(\mathbf{y}; {\mathbf{z}}) 
+&= -\sum_{j=1}^C  {y}_j z_j +  \ln \sum_{k=1}^C e^{z_k}
+\end{align}$$
+
+* this is the preferred implementation of the loss in `PyTorch`, `Flux` and all other mainstream ML packages
+"""
+
+# ╔═╡ fe0428fb-cad9-4be6-bc65-6ca920efefdd
+show_img("ce_loss_forward2.svg", w=600)
+
+# ╔═╡ 92f854cb-2b2e-421d-8e97-e3fa2e7ee8ad
+md"""
+
+
+
+## Gradient derivation
+
+
+Again, consider ``i``-th observation only,
+
+$$\begin{align}
+\large
+\mathcal{L}^{(i)}(\mathbf{y}; \hat{\mathbf{y}}) 
+&= -\sum_{j=1}^C  {y}_j z_j +  \ln \sum_{k=1}^C e^{z_k}
+\end{align}$$
+
+The partial derivative *w.r.t* ``z_c`` is
+
+```math
+\large
+\boxed{\frac{\partial \mathcal{L}^{(i)}}{\partial z_c} = - y_c + \frac{e^{z_c}}{\sum_k e^{z_k}} = - (y_c - \hat{y}_c);}
+```
+
+"""
+
+# ╔═╡ 7e513bcb-e12c-44c6-9faa-9ff99319220a
+aside(tip(md""" 
+
+```math
+\frac{d\ln(x)}{dx} = \frac{1}{x};\;\; \frac{d e^x}{dx} =e^x
+```
+
+"""))
+
+# ╔═╡ 3dec4918-2048-4ac1-9f11-facf32acc783
+show_img("ce_loss_backward1.svg", w=600)
+
+# ╔═╡ 4a56865d-88fe-4b4f-b34c-5d2eacc8f1db
+# md"""
+# ## Gradient derivation
+
+# The partial derivative *w.r.t* ``z_c`` is
+
+# ```math
+# \large
+# \frac{\partial \mathcal{L}}{\partial z_c} = - (y_c - \hat{y}_c);
+# ```
+
+# therefore, the gradient *w.r.t* ``\mathbf{z}`` is
+# ```math
+# \large
+# \nabla_{\mathbf{ z}} \mathcal{L}   = \begin{bmatrix}\frac{\partial \mathcal{L}}{\partial {z}_1}\\ \frac{\partial \mathcal{L}}{\partial {z}_2}\\ \vdots\\ \frac{\partial \mathcal{L}}{\partial {z}_C } \end{bmatrix}=\begin{bmatrix}- (y_1 - \hat{y}_1)\\ - (y_2 - \hat{y}_2)\\ \vdots\\ - (y_C - \hat{y}_C)\end{bmatrix}= - (\mathbf{y} - \hat{\mathbf{y}})
+# ```
+# """
+
+# ╔═╡ 89f918a2-62fb-4a78-86c0-a15260302a1a
+md"""
+## Gradient derivation
+
+
+The partial *w.r.t* ``{z}_c`` is
+```math
+\large
+\boxed{\frac{\partial \mathcal{L}^{(i)}}{\partial z_c}  = - (y_c - \hat{y}_c);}
+```
+
+According to **chain rule**, the gradient *w.r.t* ``\mathbf{w}_c`` is
+
+```math
+\large
+\nabla_{\mathbf{ w}_c} \mathcal{L}^{(i)}   = \frac{\partial \mathcal{L}^{(i)}}{\partial z_c} \frac{\partial z_c}{\partial \mathbf{w}_c} = - (y_c - \hat{y}_c) \cdot \mathbf{x}
+```
+
+
+* recall that ``z_c = \mathbf{w}_c^\top\mathbf{x}``, and ``\nabla_{\mathbf{w}_c} z_c = \mathbf{x}``
+"""
+
+# ╔═╡ 9c6e8c54-c6b4-46a0-9c84-4e133cead30d
+show_img("ce_loss_backward2.svg", w=600)
+
+# ╔═╡ a9d29607-59a2-43ec-9e68-bba8b97b4b7d
+md"""
+## Gradient derivation
+
+We have the partials 
+
+```math
+\large
+\nabla_{\mathbf{ w}_c} \mathcal{L}   = \frac{\partial \mathcal{L}}{\partial z_c} \frac{\partial z_c}{\partial \mathbf{w}_c} = - (y_c - \hat{y}_c) \cdot \mathbf{x}
+```
+
+Finally, the gradient w.r.t ``\mathbf{W}`` is
+
+```math
+\large
+\begin{align}
+\nabla_{\mathbf{ W}} \mathcal{L}   &= \begin{bmatrix}\rule[.5ex]{2.5ex}{0.5pt} & (\nabla_{\mathbf{ w}_1} \mathcal{L} )^\top & \rule[.5ex]{2.5ex}{0.5pt} \\ \rule[.5ex]{2.5ex}{0.5pt} & (\nabla_{\mathbf{ w}_2} \mathcal{L} )^\top & \rule[.5ex]{2.5ex}{0.5pt}\\ &\vdots & \\ \rule[.5ex]{2.5ex}{0.5pt} & (\nabla_{\mathbf{ w}_C} \mathcal{L} )^\top& \rule[.5ex]{2.5ex}{0.5pt}\end{bmatrix} = \begin{bmatrix}- (y_1 - \hat{y}_1)\cdot \mathbf{x}^\top\\ - (y_2 - \hat{y}_2)\cdot \mathbf{x}^\top\\ \vdots \\- (y_C - \hat{y}_C)\cdot \mathbf{x}^\top\end{bmatrix}\\
+&= - (\mathbf{y} -\hat{\mathbf{y}}) \cdot \mathbf{x}^\top
+\end{align}
+```
+
+Q.E.D.
+"""
+
+# ╔═╡ 7d6348e7-cb7f-4068-ad58-ebe18646bce5
+# aside(tip(md"""
+
+# ```math
+# \frac{\partial z_j}{\partial \mathbf{w}_i^\top} =\begin{cases}\mathbf{x}^\top & j=i\\
+# \mathbf{0}^\top & j\neq i
+# \end{cases}
+# ```
+# """))
+
+# ╔═╡ 5521fec7-f5f1-4cc9-9cf0-87b6e774bbd8
+md"""
+## Gradient w.r.t ``\mathbf{b}``
+Note that gradient for ``\mathbf{b}`` can be readily obtained by augmenting the input with a dummy ``1``:
+
+```math
+\large
+\nabla_{\mathbf{W}} \mathcal{L}^{(i)}  = \begin{bmatrix}[\frac{\partial \mathcal{L}^{(i)}}{\partial b_1} & \frac{\partial \mathcal{L}^{(i)}}{\partial  \mathbf{w}_1^\top}] \\ [\frac{\partial L^{(i)}}{\partial b_2} & \frac{\partial \mathcal{L}^{(i)}}{\partial \mathbf{w}_2^\top}]\\ \vdots \\ [\frac{\partial \mathcal{L}^{(i)}}{\partial b_C} & \frac{\partial \mathcal{L}^{(i)}}{\partial  \mathbf{w}_C^\top}]\end{bmatrix} = \begin{bmatrix}- (y_1 - \hat{y}_1)\\ - (y_2 - \hat{y}_2)\\ \vdots \\- (y_C - \hat{y}_C)\end{bmatrix}\cdot [1, \;\;\rule[.5ex]{2.5ex}{0.5pt} \,\, \mathbf{x}^\top \rule[.5ex]{2.5ex}{0.5pt}]
+```
+
+Therefore ,
+```math
+\large
+\nabla_{\mathbf{b}} \mathcal{L}^{(i)}  = \begin{bmatrix}\frac{\partial \mathcal{L}^{(i)}}{\partial b_1}\\ \frac{\partial \mathcal{L}^{(i)}}{\partial b_2} \\ \vdots \\ \frac{\partial \mathcal{L}^{(i)}}{\partial b_C} \end{bmatrix} = \begin{bmatrix}- (y_1 - \hat{y}_1)\\ - (y_2 - \hat{y}_2)\\ \vdots \\- (y_C - \hat{y}_C)\end{bmatrix}\cdot 1 = - (\mathbf{y} -\hat{\mathbf{y}})
+```
+"""
+
+# ╔═╡ 583ec82c-39a6-4b22-8556-627cbbe1b381
+# md"""
+
+# ## Aside: ``\frac{\partial z_j}{\partial \mathbf{w}}``
+
+
+# Note that 
+
+# ```math
+# \large
+# \mathbf{z}_{C\times 1} = \mathbf{W}_{C\times m}\mathbf{x}_{m \times 1} +\mathbf{b}_{C\times 1}
+# ```
+
+
+# which is:
+
+
+# ```math
+# \large
+# \begin{bmatrix}z_1 \\ z_2 \\ \vdots\\ z_C \end{bmatrix} = \begin{bmatrix} \rule[.5ex]{2.5ex}{0.5pt} & \mathbf{w}_1^\top &\rule[.5ex]{2.5ex}{0.5pt}\\ \rule[.5ex]{2.5ex}{0.5pt} & \mathbf{w}_2^\top&\rule[.5ex]{2.5ex}{0.5pt}\\ &\vdots &\\ \rule[.5ex]{2.5ex}{0.5pt} & \mathbf{w}_C^\top &\rule[.5ex]{2.5ex}{0.5pt}\end{bmatrix}\begin{bmatrix}\vert \\ \mathbf{x} \\ \vert \end{bmatrix} +\begin{bmatrix}b_1 \\ b_2 \\ \vdots \\b_C \end{bmatrix} ,
+# ```
+
+# therefore, 
+
+# ```math 
+# \large z_j = \mathbf{w}_j^\top\mathbf{x} +b_j
+# ```
+
+# which implies for ``z_j`` and ``\mathbf{w}_j``:
+
+# ```math
+# \frac{\partial z_j}{\partial \mathbf{w}_j} =\mathbf{x}; \;\;\text{or for row vector  }\mathbf{w}^\top: \frac{\partial z_j}{\partial \mathbf{w}_j^\top} =\mathbf{x}^\top
+# ```
+
+# for ``i\neq j``
+
+# ```math
+# \frac{\partial z_j}{\partial \mathbf{w}_{i}} =\mathbf{0}; \;\;\text{or for row vector  }\mathbf{w}_i^\top: \frac{\partial z_j}{\partial \mathbf{w}_j^\top} =\mathbf{0}^\top
+# ```
+
+# """
+
+# ╔═╡ 30c7f5be-3f0b-45ff-8a59-52e944d29703
+# md"""
+# ## Gradient derivation
+
+
+# Again, consider ``i``-th observation only,
+
+# $$\begin{align}
+# L^{(i)}(\mathbf{y}; \hat{\mathbf{y}}) 
+# &= -\sum_{j=1}^C  {y}_j z_j +  \ln \sum_{k=1}^C e^{z_k}
+# \end{align}$$
+
+# The partial derivative *w.r.t* ``z_c`` is
+
+# ```math
+# \frac{\partial L^{(i)}}{\partial z_c} = - y_c + \frac{e^{z_c}}{\sum_k e^{z_k}} = - (y_c - \hat{y}_c);
+# ```
+
+# therefore, the gradient *w.r.t* ``\mathbf{z}`` is
+# ```math
+# \frac{\partial L^{(i)}}{\partial \mathbf{z}}  = \left [\frac{\partial L^{(i)}}{\partial {z}_1}, \frac{\partial L^{(i)}}{\partial {z}_2}, \ldots, \frac{\partial L^{(i)}}{\partial {z}_C } \right ]^\top= - (\mathbf{y} - \hat{\mathbf{y}})
+# ```
+
+# According to multi-variate chain rule, the gradient w.r.t ``\mathbf{w}_c`` is
+
+# ```math
+# \begin{align}
+# \frac{\partial L^{(i)}}{\partial \mathbf{w}_c^\top}  &= \sum_{j=1}^C \frac{\partial L^{(i)}}{\partial z_j} \frac{\partial z_j}{\partial \mathbf{w}_c^\top}\\
+# &= - (y_1 - \hat{y}_1)\cdot \mathbf{0}^\top  \ldots - (y_c - \hat{y}_c)\cdot \mathbf{x}^\top  - (y_C - \hat{y}_C)\cdot \mathbf{0}^\top\\
+# &=- (y_c - \hat{y}_c)\cdot \mathbf{x}^\top
+
+# \end{align}
+# ```
+
+
+# """
+
+# ╔═╡ 0734ddb1-a9a0-4fe1-b5ee-9a839a33d1dc
+md"""
+
+## Appendix
+"""
+
+# ╔═╡ 41b227d5-fbbc-49f2-9d79-f928a7e66a3f
+function sfmax_reg_loss(W, b, X, y)
+	n = size(y)[2]
+	#forward pass
+	ŷ = soft_max(W * X .+ b)
+	loss = -sum(y .* log.(ŷ .+ eps(eltype(ŷ)))) /n
+	# backward pass
+	error = (y - ŷ)
+	gradW = - error * X'/n
+	gradb = - sum(error, dims=2)[:]/n
+	loss, gradW, gradb
+end
+
+# ╔═╡ 8687dbd1-4857-40e4-b9cb-af469b8563e2
+function perp_square(origin, vx, vy; δ=0.1) 
+	x = δ * vx/sqrt(norm(vx))
+	y = δ * vy/sqrt(norm(vy))
+	xyunit = origin+ x + y
+	xunit = origin + x
+	yunit = origin +y
+	Shape([origin[1], xunit[1], xyunit[1], yunit[1]], [origin[2], xunit[2], xyunit[2], yunit[2]])
+end
+
+# ╔═╡ fab7a0dd-3a9e-463e-a66b-432a6b2d8a1b
+# as: arrow head size 0-1 (fraction of arrow length)
+# la: arrow alpha transparency 0-1
+function arrow3d!(x, y, z,  u, v, w; as=0.1, lc=:black, la=1, lw=0.4, scale=:identity)
+    (as < 0) && (nv0 = -maximum(norm.(eachrow([u v w]))))
+    for (x,y,z, u,v,w) in zip(x,y,z, u,v,w)
+        nv = sqrt(u^2 + v^2 + w^2)
+        v1, v2 = -[u,v,w]/nv, nullspace(adjoint([u,v,w]))[:,1]
+        v4 = (3*v1 + v2)/3.1623  # sqrt(10) to get unit vector
+        v5 = v4 - 2*(v4'*v2)*v2
+        (as < 0) && (nv = nv0) 
+        v4, v5 = -as*nv*v4, -as*nv*v5
+        plot!([x,x+u], [y,y+v], [z,z+w], lc=lc, la=la, lw=lw, scale=scale, label=false)
+        plot!([x+u,x+u-v5[1]], [y+v,y+v-v5[2]], [z+w,z+w-v5[3]], lc=lc, la=la, lw=lw, label=false)
+        plot!([x+u,x+u-v4[1]], [y+v,y+v-v4[2]], [z+w,z+w-v4[3]], lc=lc, la=la, lw=lw, label=false)
+    end
+end
+
+# ╔═╡ 491f5439-d984-4446-b473-8e6a0214bded
+begin
+	Xs = dropmissing(df)[:, 3:6] |> Matrix
+	Ys = dropmissing(df)[:, 1]
+	Ys_onehot  = Flux.onehotbatch(Ys, unique(Ys))
+end;
+
+# ╔═╡ ec704221-a9ab-4e98-9a17-b0843591a2e7
+#=╠═╡
+begin
+	train, test = splitobs((Xs', Ys), at=0.7, shuffle=true)
+	Xtrain, Ytrain= train
+	Xtest, Ytest = test
+	dt = fit(ZScoreTransform, Xtrain, dims=2)
+	X_train_stand = StatsBase.transform(dt, Xtrain)
+	X_test_stand = StatsBase.transform(dt, Xtest)
+end;
+  ╠═╡ =#
+
+# ╔═╡ 9f88f71b-f339-4fbe-8368-bd1d9daefe2b
+#=╠═╡
+begin
+	labels = unique(Ys)
+	target = Flux.onehotbatch(Ytrain, labels)
+	X_input = X_train_stand[1:2, :]
+	train_loader = DataLoader((data=X_input, label=target), batchsize=50, shuffle=true);
+	imput_dim = size(X_input)[1]
+	output_class = 3
+	# Define our model, a multi-layer perceptron with one hidden layer of size 3:
+	model = Chain(
+	    Dense(imput_dim => output_class),   # activation function inside layer
+	    softmax) |> f64       # move model to GPU, if available
+	
+	# The model encapsulates parameters, randomly initialised. Its initial output is:
+	out1 = model(X_input)                                 # 2×1000 Matrix{Float32}
+
+	optim = Flux.setup(Flux.Descent(0.05), model)  # will store optimiser momentum, etc.
+
+	losses = []
+	for epoch in 1:1_000
+	    for (x, y) in train_loader
+	        loss, grads = Flux.withgradient(model) do m
+	            # Evaluate model and loss inside gradient context:
+	            y_hat = m(x)
+	            Flux.crossentropy(y_hat, y)
+	        end
+			# l, gW, gb = sf_reg_loss(, b, X, y)
+			
+	        Flux.update!(optim, model, grads[1])
+	        push!(losses, loss)  # logging, outside gradient context
+	    end
+	end
+end;
+  ╠═╡ =#
+
+# ╔═╡ e6b8a809-3c61-48b6-9215-6df865038316
+#=╠═╡
+begin
+	gr()
+	plt_predicted = @df df_stand scatter(:bill_length_mm, :bill_depth_mm, group =:species, framestyle=:origins,  xlabel="bill length (mm)", ylabel="bill depth (mm)", ratio=1)
+
+
+	# plot(plt_true, plt_predicted)
+	if add_sf
+		plot!(plt_predicted, -2.5:0.02:2.9, -2.5:0.02:2.7, (x,y) -> model([x, y]) |> argmax, st=:heatmap, alpha=0.3, xlim = (-2.5, 2.5), c=[1,3,2], ylim=(-2.5, 2.5), colorbar=false)
+	else
+		plot!(plt_predicted, -2.5:0.02:2.9, -2.5:0.02:2.7, (x,y) -> model([x, y])[sf_c], st=:contour, alpha=1, levels=8, color=:jet, colorbar=false)
+	end
+
+	plt_predicted
+end
+  ╠═╡ =#
+
+# ╔═╡ db795dfc-e791-49bb-805a-35b6af3e1eb4
+#=╠═╡
+let
+## gradient check for softmax
+	W = randn(3, 2)
+	b = zeros(3)
+
+	function sf_loss(W,  b, X, y)
+		ŷ = W * X .+ b
+		Flux.logitcrossentropy(ŷ, y; agg=mean)
+	end
+
+	gW, gb = Zygote.gradient((ww, bb) -> sf_loss(ww, bb, X_input, target), W, b)
+	_, gW_,	gb_ = sfmax_reg_loss(W, b, X_input, target)
+	# ŷ = softmax(W * X_input .+ b, dims=1)
+
+	# - (target - ŷ) * X_input'/size(target)[2] ≈ gW
+
+	# - mean(target - ŷ, dims=2)[:] ≈ gb
+	gW ≈ gW_, gb ≈ gb_
+end;
+  ╠═╡ =#
+
+# ╔═╡ 42ad4c47-d9b6-4f64-b1ee-caa5592adfab
+#=╠═╡
+begin
+	model2 = Chain(
+	    Dense(imput_dim => output_class),   # activation function inside layer
+	) |> f64       # move model to GPU, if available
+	
+
+	optim2 = Flux.setup(Flux.Descent(0.05), model2) 
+
+	losses2 = []
+	for epoch in 1:1_000
+	    for (x, y) in train_loader
+	        loss, grads = Flux.withgradient(model2) do m
+	            # Evaluate model and loss inside gradient context:
+	            y_hat = m(x)
+	            # Flux.crossentropy(y_hat, y)
+				Flux.logitbinarycrossentropy(y_hat, y; agg=sum)/size(y)[2]
+	        end
+	        Flux.update!(optim2, model2, grads[1])
+	        push!(losses2, loss)  # logging, outside gradient context
+	    end
+	end
+end
+  ╠═╡ =#
+
+# ╔═╡ 375a4529-c4d0-406c-b483-64efbdd56f39
+#=╠═╡
+let
+	# Stochastic gradient descent
+	imput_dim = size(X_input)[1]
+	output_class = 3
+	W = randn(output_class, imput_dim)
+	b = zeros(output_class)
+	λ = 0.05
+	losses = []
+	for epoch in 1:1_000
+	    for (x, y) in train_loader
+			loss, gW, gb = sfmax_reg_loss(W, b, x, y)
+			W .-= λ * gW
+			b .-= λ * gb
+	        push!(losses, loss)  # logging, outside gradient context
+	    end
+	end
+end
+  ╠═╡ =#
+
+# ╔═╡ 0826acba-18ca-441d-a802-7482b2c17faf
+#=╠═╡
+begin
+	pred_sf_test = model(X_test_stand[1:2,:]) 
+	pred_ova_test = model2(X_test_stand[1:2,:]) 
+
+	pred_sf_train = model(X_train_stand[1:2,:]) 
+	pred_ova_train = model2(X_train_stand[1:2,:]) 
+
+	test_acc_sf = mean(Flux.onecold(pred_sf_test, labels) .==Ytest)
+	
+	test_acc_ova = mean(Flux.onecold(pred_ova_test, labels) .==Ytest)
+	train_acc_sf = mean(Flux.onecold(pred_sf_train, labels) .==Ytrain)
+	train_acc_ova = mean(Flux.onecold(pred_ova_train, labels) .==Ytrain)
+end;
+  ╠═╡ =#
+
+# ╔═╡ 3d90e684-f6e3-466c-bd44-479597277edb
+# using ProgressMeter
+
+# ╔═╡ 073798be-22ee-4280-9155-44831227e195
+feature_names = names(df)[3:6];
+
+# ╔═╡ eea8ac82-9210-4734-bb07-8bf0e912434a
+#=╠═╡
+begin
+	df_stand = DataFrame(X_train_stand', feature_names)
+	insertcols!(df_stand, "species" => Ytrain)
+	pred_species_sfm = Flux.onecold(model(X_input) , unique(Ys))
+	pred_species_ova = Flux.onecold(model2(X_input) .|> σ, unique(Ys))
+	insertcols!(df_stand, "pred_species_softmax" => pred_species_sfm)
+	insertcols!(df_stand, "pred_species_ova" => pred_species_ova)
+end;
+  ╠═╡ =#
+
+# ╔═╡ 23196682-02ae-4caf-9d75-3aba91df5b86
+#=╠═╡
+begin
+	function loss_one_v_all(W, X, ts)
+		Flux.logitbinarycrossentropy(W * X, ts; agg = sum)
+	end
+
+	gradW(W) = Zygote.gradient((ww) -> loss_one_v_all(ww, X_input, target), W)[1]
+end;
+  ╠═╡ =#
+
+# ╔═╡ 572dd293-a343-43d2-aa53-4775db9ec56a
+#=╠═╡
+let
+	W = rand(3,2)
+	# gW = similar(W)
+	# for k in 1:3
+	# 	gW[k, :] = - X_input * (target[k, :] - σ.(W[k, :]' * X_input)[:]) 
+	# end
+
+	# gW
+	(- (target - σ.(W * X_input)) * X_input') - gradW(W)
+
+	
+	# W[1, :]' * X_input
+end;
+  ╠═╡ =#
+
+# ╔═╡ d0867ff4-da8a-45ce-adbc-8af12af89779
+# ╠═╡ disabled = true
+#=╠═╡
+using StatsBase
+  ╠═╡ =#
+
+# ╔═╡ 1ed6e4d4-5e9a-4989-9fa9-210b574de6b0
+#=╠═╡
+using StatsBase
+  ╠═╡ =#
+
+# ╔═╡ 00000000-0000-0000-0000-000000000001
+PLUTO_PROJECT_TOML_CONTENTS = """
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+Latexify = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+MLUtils = "f1d291b0-491e-4a28-83b9-f70985020b54"
+PalmerPenguins = "8b842266-38fa-440a-9b57-31493939ab85"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+StatsPlots = "f3b207a7-027a-5e70-b257-86293d7955fd"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[compat]
+DataFrames = "~1.6.1"
+Distributions = "~0.25.107"
+Flux = "~0.14.9"
+HypertextLiteral = "~0.9.5"
+LaTeXStrings = "~1.3.1"
+Latexify = "~0.16.1"
+MLUtils = "~0.4.4"
+PalmerPenguins = "~0.1.4"
+Plots = "~1.39.0"
+PlutoTeachingTools = "~0.2.14"
+PlutoUI = "~0.7.54"
+StatsBase = "~0.34.2"
+StatsPlots = "~0.15.6"
+Zygote = "~0.6.68"
+"""
+
+# ╔═╡ 00000000-0000-0000-0000-000000000002
+PLUTO_MANIFEST_TOML_CONTENTS = """
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.10.1"
+manifest_format = "2.0"
+project_hash = "91b59ad2ee105b2c9518ec3e6392004e3efc6255"
+
+[[deps.AbstractFFTs]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "d92ad398961a3ed262d8bf04a1a2b8340f915fef"
+uuid = "621f4979-c628-5d54-868e-fcf4e3e8185c"
+version = "1.5.0"
+weakdeps = ["ChainRulesCore", "Test"]
+
+    [deps.AbstractFFTs.extensions]
+    AbstractFFTsChainRulesCoreExt = "ChainRulesCore"
+    AbstractFFTsTestExt = "Test"
+
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "c278dfab760520b8bb7e9511b968bf4ba38b7acc"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.2.3"
+
+[[deps.Adapt]]
+deps = ["LinearAlgebra", "Requires"]
+git-tree-sha1 = "cde29ddf7e5726c9fb511f340244ea3481267608"
+uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+version = "3.7.2"
+weakdeps = ["StaticArrays"]
+
+    [deps.Adapt.extensions]
+    AdaptStaticArraysExt = "StaticArrays"
+
+[[deps.ArgCheck]]
+git-tree-sha1 = "a3a402a35a2f7e0b87828ccabbd5ebfbebe356b4"
+uuid = "dce04be8-c92d-5529-be00-80e4d2c0e197"
+version = "2.3.0"
+
+[[deps.ArgTools]]
+uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+version = "1.1.1"
+
+[[deps.Arpack]]
+deps = ["Arpack_jll", "Libdl", "LinearAlgebra", "Logging"]
+git-tree-sha1 = "9b9b347613394885fd1c8c7729bfc60528faa436"
+uuid = "7d9fca2a-8960-54d3-9f78-7d1dccf2cb97"
+version = "0.5.4"
+
+[[deps.Arpack_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "OpenBLAS_jll", "Pkg"]
+git-tree-sha1 = "5ba6c757e8feccf03a1554dfaf3e26b3cfc7fd5e"
+uuid = "68821587-b530-5797-8361-c406ea357684"
+version = "3.5.1+1"
+
+[[deps.Artifacts]]
+uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[[deps.Atomix]]
+deps = ["UnsafeAtomics"]
+git-tree-sha1 = "c06a868224ecba914baa6942988e2f2aade419be"
+uuid = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
+version = "0.1.0"
+
+[[deps.AxisAlgorithms]]
+deps = ["LinearAlgebra", "Random", "SparseArrays", "WoodburyMatrices"]
+git-tree-sha1 = "66771c8d21c8ff5e3a93379480a2307ac36863f7"
+uuid = "13072b0f-2c55-5437-9ae7-d433b7a33950"
+version = "1.0.1"
+
+[[deps.BangBang]]
+deps = ["Compat", "ConstructionBase", "InitialValues", "LinearAlgebra", "Requires", "Setfield", "Tables"]
+git-tree-sha1 = "e28912ce94077686443433c2800104b061a827ed"
+uuid = "198e06fe-97b7-11e9-32a5-e1d131e6ad66"
+version = "0.3.39"
+
+    [deps.BangBang.extensions]
+    BangBangChainRulesCoreExt = "ChainRulesCore"
+    BangBangDataFramesExt = "DataFrames"
+    BangBangStaticArraysExt = "StaticArrays"
+    BangBangStructArraysExt = "StructArrays"
+    BangBangTypedTablesExt = "TypedTables"
+
+    [deps.BangBang.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+    StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+    StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
+    TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
+
+[[deps.Base64]]
+uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.Baselet]]
+git-tree-sha1 = "aebf55e6d7795e02ca500a689d326ac979aaf89e"
+uuid = "9718e550-a3fa-408a-8086-8db961cd8217"
+version = "0.1.1"
+
+[[deps.BitFlags]]
+git-tree-sha1 = "2dc09997850d68179b69dafb58ae806167a32b1b"
+uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
+version = "0.1.8"
+
+[[deps.Bzip2_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
+uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
+version = "1.0.8+0"
+
+[[deps.CEnum]]
+git-tree-sha1 = "389ad5c84de1ae7cf0e28e381131c98ea87d54fc"
+uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
+version = "0.5.0"
+
+[[deps.CSV]]
+deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "PrecompileTools", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings", "WorkerUtilities"]
+git-tree-sha1 = "679e69c611fff422038e9e21e270c4197d49d918"
+uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+version = "0.10.12"
+
+[[deps.Cairo_jll]]
+deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
+git-tree-sha1 = "4b859a208b2397a7a623a03449e4636bdb17bcf2"
+uuid = "83423d85-b0ee-5818-9007-b63ccbeb887a"
+version = "1.16.1+1"
+
+[[deps.Calculus]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "f641eb0a4f00c343bbc32346e1217b86f3ce9dad"
+uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
+version = "0.5.1"
+
+[[deps.ChainRules]]
+deps = ["Adapt", "ChainRulesCore", "Compat", "Distributed", "GPUArraysCore", "IrrationalConstants", "LinearAlgebra", "Random", "RealDot", "SparseArrays", "SparseInverseSubset", "Statistics", "StructArrays", "SuiteSparse"]
+git-tree-sha1 = "0aa0a3dd7b9bacbbadf1932ccbdfa938985c5561"
+uuid = "082447d4-558c-5d27-93f4-14fc19e9eca2"
+version = "1.58.1"
+
+[[deps.ChainRulesCore]]
+deps = ["Compat", "LinearAlgebra"]
+git-tree-sha1 = "2118cb2765f8197b08e5958cdd17c165427425ee"
+uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+version = "1.19.0"
+weakdeps = ["SparseArrays"]
+
+    [deps.ChainRulesCore.extensions]
+    ChainRulesCoreSparseArraysExt = "SparseArrays"
+
+[[deps.Clustering]]
+deps = ["Distances", "LinearAlgebra", "NearestNeighbors", "Printf", "Random", "SparseArrays", "Statistics", "StatsBase"]
+git-tree-sha1 = "407f38961ac11a6e14b2df7095a2577f7cb7cb1b"
+uuid = "aaaa29a8-35af-508c-8bc3-b662a17a0fe5"
+version = "0.15.6"
+
+[[deps.CodeTracking]]
+deps = ["InteractiveUtils", "UUIDs"]
+git-tree-sha1 = "c0216e792f518b39b22212127d4a84dc31e4e386"
+uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
+version = "1.3.5"
+
+[[deps.CodecZlib]]
+deps = ["TranscodingStreams", "Zlib_jll"]
+git-tree-sha1 = "cd67fc487743b2f0fd4380d4cbd3a24660d0eec8"
+uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
+version = "0.7.3"
+
+[[deps.ColorSchemes]]
+deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
+git-tree-sha1 = "67c1f244b991cad9b0aa4b7540fb758c2488b129"
+uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
+version = "3.24.0"
+
+[[deps.ColorTypes]]
+deps = ["FixedPointNumbers", "Random"]
+git-tree-sha1 = "eb7f0f8307f71fac7c606984ea5fb2817275d6e4"
+uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
+version = "0.11.4"
+
+[[deps.ColorVectorSpace]]
+deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "Requires", "Statistics", "TensorCore"]
+git-tree-sha1 = "a1f44953f2382ebb937d60dafbe2deea4bd23249"
+uuid = "c3611d14-8923-5661-9e6a-0046d554d3a4"
+version = "0.10.0"
+weakdeps = ["SpecialFunctions"]
+
+    [deps.ColorVectorSpace.extensions]
+    SpecialFunctionsExt = "SpecialFunctions"
+
+[[deps.Colors]]
+deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
+git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
+uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
+version = "0.12.10"
+
+[[deps.CommonSubexpressions]]
+deps = ["MacroTools", "Test"]
+git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
+uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
+version = "0.3.0"
+
+[[deps.Compat]]
+deps = ["UUIDs"]
+git-tree-sha1 = "886826d76ea9e72b35fcd000e535588f7b60f21d"
+uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
+version = "4.10.1"
+weakdeps = ["Dates", "LinearAlgebra"]
+
+    [deps.Compat.extensions]
+    CompatLinearAlgebraExt = "LinearAlgebra"
+
+[[deps.CompilerSupportLibraries_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+version = "1.1.0+0"
+
+[[deps.CompositionsBase]]
+git-tree-sha1 = "802bb88cd69dfd1509f6670416bd4434015693ad"
+uuid = "a33af91c-f02d-484b-be07-31d278c5ca2b"
+version = "0.1.2"
+
+    [deps.CompositionsBase.extensions]
+    CompositionsBaseInverseFunctionsExt = "InverseFunctions"
+
+    [deps.CompositionsBase.weakdeps]
+    InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
+
+[[deps.ConcurrentUtilities]]
+deps = ["Serialization", "Sockets"]
+git-tree-sha1 = "8cfa272e8bdedfa88b6aefbbca7c19f1befac519"
+uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
+version = "2.3.0"
+
+[[deps.ConstructionBase]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "c53fc348ca4d40d7b371e71fd52251839080cbc9"
+uuid = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
+version = "1.5.4"
+
+    [deps.ConstructionBase.extensions]
+    ConstructionBaseIntervalSetsExt = "IntervalSets"
+    ConstructionBaseStaticArraysExt = "StaticArrays"
+
+    [deps.ConstructionBase.weakdeps]
+    IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
+    StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[[deps.ContextVariablesX]]
+deps = ["Compat", "Logging", "UUIDs"]
+git-tree-sha1 = "25cc3803f1030ab855e383129dcd3dc294e322cc"
+uuid = "6add18c4-b38d-439d-96f6-d6bc489c04c5"
+version = "0.1.3"
+
+[[deps.Contour]]
+git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
+uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
+version = "0.6.2"
+
+[[deps.Crayons]]
+git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
+uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
+version = "4.1.1"
+
+[[deps.DataAPI]]
+git-tree-sha1 = "8da84edb865b0b5b0100c0666a9bc9a0b71c553c"
+uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
+version = "1.15.0"
+
+[[deps.DataDeps]]
+deps = ["HTTP", "Libdl", "Reexport", "SHA", "p7zip_jll"]
+git-tree-sha1 = "6e8d74545d34528c30ccd3fa0f3c00f8ed49584c"
+uuid = "124859b0-ceae-595e-8997-d05f6a7a8dfe"
+version = "0.7.11"
+
+[[deps.DataFrames]]
+deps = ["Compat", "DataAPI", "DataStructures", "Future", "InlineStrings", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrecompileTools", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SentinelArrays", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
+git-tree-sha1 = "04c738083f29f86e62c8afc341f0967d8717bdb8"
+uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+version = "1.6.1"
+
+[[deps.DataStructures]]
+deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
+git-tree-sha1 = "ac67408d9ddf207de5cfa9a97e114352430f01ed"
+uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+version = "0.18.16"
+
+[[deps.DataValueInterfaces]]
+git-tree-sha1 = "bfc1187b79289637fa0ef6d4436ebdfe6905cbd6"
+uuid = "e2d170a0-9d28-54be-80f0-106bbe20a464"
+version = "1.0.0"
+
+[[deps.Dates]]
+deps = ["Printf"]
+uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
+
+[[deps.DefineSingletons]]
+git-tree-sha1 = "0fba8b706d0178b4dc7fd44a96a92382c9065c2c"
+uuid = "244e2a9f-e319-4986-a169-4d1fe445cd52"
+version = "0.1.2"
+
+[[deps.DelimitedFiles]]
+deps = ["Mmap"]
+git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
+uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+version = "1.9.1"
+
+[[deps.DiffResults]]
+deps = ["StaticArraysCore"]
+git-tree-sha1 = "782dd5f4561f5d267313f23853baaaa4c52ea621"
+uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
+version = "1.1.0"
+
+[[deps.DiffRules]]
+deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
+git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
+uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
+version = "1.15.1"
+
+[[deps.Distances]]
+deps = ["LinearAlgebra", "Statistics", "StatsAPI"]
+git-tree-sha1 = "66c4c81f259586e8f002eacebc177e1fb06363b0"
+uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+version = "0.10.11"
+weakdeps = ["ChainRulesCore", "SparseArrays"]
+
+    [deps.Distances.extensions]
+    DistancesChainRulesCoreExt = "ChainRulesCore"
+    DistancesSparseArraysExt = "SparseArrays"
+
+[[deps.Distributed]]
+deps = ["Random", "Serialization", "Sockets"]
+uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+
+[[deps.Distributions]]
+deps = ["FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns"]
+git-tree-sha1 = "7c302d7a5fec5214eb8a5a4c466dcf7a51fcf169"
+uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
+version = "0.25.107"
+
+    [deps.Distributions.extensions]
+    DistributionsChainRulesCoreExt = "ChainRulesCore"
+    DistributionsDensityInterfaceExt = "DensityInterface"
+    DistributionsTestExt = "Test"
+
+    [deps.Distributions.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
+    Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[[deps.DocStringExtensions]]
+deps = ["LibGit2"]
+git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
+uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+version = "0.9.3"
+
+[[deps.Downloads]]
+deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
+uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+version = "1.6.0"
+
+[[deps.DualNumbers]]
+deps = ["Calculus", "NaNMath", "SpecialFunctions"]
+git-tree-sha1 = "5837a837389fccf076445fce071c8ddaea35a566"
+uuid = "fa6b7ba4-c1ee-5f82-b5fc-ecf0adba8f74"
+version = "0.6.8"
+
+[[deps.EpollShim_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "8e9441ee83492030ace98f9789a654a6d0b1f643"
+uuid = "2702e6a9-849d-5ed8-8c21-79e8b8f9ee43"
+version = "0.0.20230411+0"
+
+[[deps.ExceptionUnwrapping]]
+deps = ["Test"]
+git-tree-sha1 = "dcb08a0d93ec0b1cdc4af184b26b591e9695423a"
+uuid = "460bff9d-24e4-43bc-9d9f-a8973cb893f4"
+version = "0.1.10"
+
+[[deps.Expat_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "4558ab818dcceaab612d1bb8c19cee87eda2b83c"
+uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
+version = "2.5.0+0"
+
+[[deps.FFMPEG]]
+deps = ["FFMPEG_jll"]
+git-tree-sha1 = "b57e3acbe22f8484b4b5ff66a7499717fe1a9cc8"
+uuid = "c87230d0-a227-11e9-1b43-d7ebe4e7570a"
+version = "0.4.1"
+
+[[deps.FFMPEG_jll]]
+deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
+git-tree-sha1 = "466d45dc38e15794ec7d5d63ec03d776a9aff36e"
+uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
+version = "4.4.4+1"
+
+[[deps.FFTW]]
+deps = ["AbstractFFTs", "FFTW_jll", "LinearAlgebra", "MKL_jll", "Preferences", "Reexport"]
+git-tree-sha1 = "ec22cbbcd01cba8f41eecd7d44aac1f23ee985e3"
+uuid = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+version = "1.7.2"
+
+[[deps.FFTW_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "c6033cc3892d0ef5bb9cd29b7f2f0331ea5184ea"
+uuid = "f5851436-0d7a-5f13-b9de-f02708fd171a"
+version = "3.3.10+0"
+
+[[deps.FLoops]]
+deps = ["BangBang", "Compat", "FLoopsBase", "InitialValues", "JuliaVariables", "MLStyle", "Serialization", "Setfield", "Transducers"]
+git-tree-sha1 = "ffb97765602e3cbe59a0589d237bf07f245a8576"
+uuid = "cc61a311-1640-44b5-9fba-1b764f453329"
+version = "0.2.1"
+
+[[deps.FLoopsBase]]
+deps = ["ContextVariablesX"]
+git-tree-sha1 = "656f7a6859be8673bf1f35da5670246b923964f7"
+uuid = "b9860ae5-e623-471e-878b-f6a53c775ea6"
+version = "0.1.1"
+
+[[deps.FilePathsBase]]
+deps = ["Compat", "Dates", "Mmap", "Printf", "Test", "UUIDs"]
+git-tree-sha1 = "9f00e42f8d99fdde64d40c8ea5d14269a2e2c1aa"
+uuid = "48062228-2e41-5def-b9a4-89aafe57970f"
+version = "0.9.21"
+
+[[deps.FileWatching]]
+uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+
+[[deps.FillArrays]]
+deps = ["LinearAlgebra", "Random"]
+git-tree-sha1 = "5b93957f6dcd33fc343044af3d48c215be2562f1"
+uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
+version = "1.9.3"
+weakdeps = ["PDMats", "SparseArrays", "Statistics"]
+
+    [deps.FillArrays.extensions]
+    FillArraysPDMatsExt = "PDMats"
+    FillArraysSparseArraysExt = "SparseArrays"
+    FillArraysStatisticsExt = "Statistics"
+
+[[deps.FixedPointNumbers]]
+deps = ["Statistics"]
+git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
+uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
+version = "0.8.4"
+
+[[deps.Flux]]
+deps = ["Adapt", "ChainRulesCore", "Compat", "Functors", "LinearAlgebra", "MLUtils", "MacroTools", "NNlib", "OneHotArrays", "Optimisers", "Preferences", "ProgressLogging", "Random", "Reexport", "SparseArrays", "SpecialFunctions", "Statistics", "Zygote"]
+git-tree-sha1 = "2827339fbc2291d541a9c62ffbf28da7f3621ae4"
+uuid = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+version = "0.14.9"
+
+    [deps.Flux.extensions]
+    FluxAMDGPUExt = "AMDGPU"
+    FluxCUDAExt = "CUDA"
+    FluxCUDAcuDNNExt = ["CUDA", "cuDNN"]
+    FluxMetalExt = "Metal"
+
+    [deps.Flux.weakdeps]
+    AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+    CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+    Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
+    cuDNN = "02a925ec-e4fe-4b08-9a7e-0d78e3d38ccd"
+
+[[deps.Fontconfig_jll]]
+deps = ["Artifacts", "Bzip2_jll", "Expat_jll", "FreeType2_jll", "JLLWrappers", "Libdl", "Libuuid_jll", "Pkg", "Zlib_jll"]
+git-tree-sha1 = "21efd19106a55620a188615da6d3d06cd7f6ee03"
+uuid = "a3f928ae-7b40-5064-980b-68af3947d34b"
+version = "2.13.93+0"
+
+[[deps.Formatting]]
+deps = ["Printf"]
+git-tree-sha1 = "8339d61043228fdd3eb658d86c926cb282ae72a8"
+uuid = "59287772-0a20-5a39-b81b-1366585eb4c0"
+version = "0.4.2"
+
+[[deps.ForwardDiff]]
+deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
+git-tree-sha1 = "cf0fe81336da9fb90944683b8c41984b08793dad"
+uuid = "f6369f11-7733-5829-9624-2563aa707210"
+version = "0.10.36"
+weakdeps = ["StaticArrays"]
+
+    [deps.ForwardDiff.extensions]
+    ForwardDiffStaticArraysExt = "StaticArrays"
+
+[[deps.FreeType2_jll]]
+deps = ["Artifacts", "Bzip2_jll", "JLLWrappers", "Libdl", "Zlib_jll"]
+git-tree-sha1 = "d8db6a5a2fe1381c1ea4ef2cab7c69c2de7f9ea0"
+uuid = "d7e528f0-a631-5988-bf34-fe36492bcfd7"
+version = "2.13.1+0"
+
+[[deps.FriBidi_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "aa31987c2ba8704e23c6c8ba8a4f769d5d7e4f91"
+uuid = "559328eb-81f9-559d-9380-de523a88c83c"
+version = "1.0.10+0"
+
+[[deps.Functors]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "9a68d75d466ccc1218d0552a8e1631151c569545"
+uuid = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
+version = "0.4.5"
+
+[[deps.Future]]
+deps = ["Random"]
+uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
+
+[[deps.GLFW_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libglvnd_jll", "Xorg_libXcursor_jll", "Xorg_libXi_jll", "Xorg_libXinerama_jll", "Xorg_libXrandr_jll"]
+git-tree-sha1 = "ff38ba61beff76b8f4acad8ab0c97ef73bb670cb"
+uuid = "0656b61e-2033-5cc2-a64a-77c0f6c09b89"
+version = "3.3.9+0"
+
+[[deps.GPUArrays]]
+deps = ["Adapt", "GPUArraysCore", "LLVM", "LinearAlgebra", "Printf", "Random", "Reexport", "Serialization", "Statistics"]
+git-tree-sha1 = "85d7fb51afb3def5dcb85ad31c3707795c8bccc1"
+uuid = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
+version = "9.1.0"
+
+[[deps.GPUArraysCore]]
+deps = ["Adapt"]
+git-tree-sha1 = "2d6ca471a6c7b536127afccfa7564b5b39227fe0"
+uuid = "46192b85-c4d5-4398-a991-12ede77f4527"
+version = "0.1.5"
+
+[[deps.GR]]
+deps = ["Artifacts", "Base64", "DelimitedFiles", "Downloads", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Preferences", "Printf", "Random", "Serialization", "Sockets", "TOML", "Tar", "Test", "UUIDs", "p7zip_jll"]
+git-tree-sha1 = "27442171f28c952804dede8ff72828a96f2bfc1f"
+uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
+version = "0.72.10"
+
+[[deps.GR_jll]]
+deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "FreeType2_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Qt6Base_jll", "Zlib_jll", "libpng_jll"]
+git-tree-sha1 = "025d171a2847f616becc0f84c8dc62fe18f0f6dd"
+uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
+version = "0.72.10+0"
+
+[[deps.Gettext_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
+git-tree-sha1 = "9b02998aba7bf074d14de89f9d37ca24a1a0b046"
+uuid = "78b55507-aeef-58d4-861c-77aaff3498b1"
+version = "0.21.0+0"
+
+[[deps.Glib_jll]]
+deps = ["Artifacts", "Gettext_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Libiconv_jll", "Libmount_jll", "PCRE2_jll", "Zlib_jll"]
+git-tree-sha1 = "e94c92c7bf4819685eb80186d51c43e71d4afa17"
+uuid = "7746bdde-850d-59dc-9ae8-88ece973131d"
+version = "2.76.5+0"
+
+[[deps.Graphite2_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "344bf40dcab1073aca04aa0df4fb092f920e4011"
+uuid = "3b182d85-2403-5c21-9c21-1e1f0cc25472"
+version = "1.3.14+0"
+
+[[deps.Grisu]]
+git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
+uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
+version = "1.0.2"
+
+[[deps.HTTP]]
+deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
+git-tree-sha1 = "abbbb9ec3afd783a7cbd82ef01dcd088ea051398"
+uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+version = "1.10.1"
+
+[[deps.HarfBuzz_jll]]
+deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
+git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
+uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
+version = "2.8.1+1"
+
+[[deps.HypergeometricFunctions]]
+deps = ["DualNumbers", "LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]
+git-tree-sha1 = "f218fe3736ddf977e0e772bc9a586b2383da2685"
+uuid = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
+version = "0.3.23"
+
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.4"
+
+[[deps.HypertextLiteral]]
+deps = ["Tricks"]
+git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.5"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "d75853a0bdbfb1ac815478bacd89cd27b550ace6"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.3"
+
+[[deps.IRTools]]
+deps = ["InteractiveUtils", "MacroTools", "Test"]
+git-tree-sha1 = "8aa91235360659ca7560db43a7d57541120aa31d"
+uuid = "7869d1d1-7146-5819-86e3-90919afe41df"
+version = "0.4.11"
+
+[[deps.InitialValues]]
+git-tree-sha1 = "4da0f88e9a39111c2fa3add390ab15f3a44f3ca3"
+uuid = "22cec73e-a1b8-11e9-2c92-598750a2cf9c"
+version = "0.3.1"
+
+[[deps.InlineStrings]]
+deps = ["Parsers"]
+git-tree-sha1 = "9cc2baf75c6d09f9da536ddf58eb2f29dedaf461"
+uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
+version = "1.4.0"
+
+[[deps.IntelOpenMP_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "5fdf2fe6724d8caabf43b557b84ce53f3b7e2f6b"
+uuid = "1d5cc7b8-4909-519e-a0f8-d0f5ad9712d0"
+version = "2024.0.2+0"
+
+[[deps.InteractiveUtils]]
+deps = ["Markdown"]
+uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+
+[[deps.Interpolations]]
+deps = ["Adapt", "AxisAlgorithms", "ChainRulesCore", "LinearAlgebra", "OffsetArrays", "Random", "Ratios", "Requires", "SharedArrays", "SparseArrays", "StaticArrays", "WoodburyMatrices"]
+git-tree-sha1 = "721ec2cf720536ad005cb38f50dbba7b02419a15"
+uuid = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+version = "0.14.7"
+
+[[deps.InvertedIndices]]
+git-tree-sha1 = "0dc7b50b8d436461be01300fd8cd45aa0274b038"
+uuid = "41ab1584-1d38-5bbf-9106-f11c6c58b48f"
+version = "1.3.0"
+
+[[deps.IrrationalConstants]]
+git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
+uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
+version = "0.2.2"
+
+[[deps.IteratorInterfaceExtensions]]
+git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
+uuid = "82899510-4779-5014-852e-03e436cf321d"
+version = "1.0.0"
+
+[[deps.JLFzf]]
+deps = ["Pipe", "REPL", "Random", "fzf_jll"]
+git-tree-sha1 = "a53ebe394b71470c7f97c2e7e170d51df21b17af"
+uuid = "1019f520-868f-41f5-a6de-eb00f4b6a39c"
+version = "0.1.7"
+
+[[deps.JLLWrappers]]
+deps = ["Artifacts", "Preferences"]
+git-tree-sha1 = "7e5d6779a1e09a36db2a7b6cff50942a0a7d0fca"
+uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
+version = "1.5.0"
+
+[[deps.JSON]]
+deps = ["Dates", "Mmap", "Parsers", "Unicode"]
+git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
+uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+version = "0.21.4"
+
+[[deps.JpegTurbo_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "60b1194df0a3298f460063de985eae7b01bc011a"
+uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
+version = "3.0.1+0"
+
+[[deps.JuliaInterpreter]]
+deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
+git-tree-sha1 = "04663b9e1eb0d0eabf76a6d0752e0dac83d53b36"
+uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
+version = "0.9.28"
+
+[[deps.JuliaVariables]]
+deps = ["MLStyle", "NameResolution"]
+git-tree-sha1 = "49fb3cb53362ddadb4415e9b73926d6b40709e70"
+uuid = "b14d175d-62b4-44ba-8fb7-3064adc8c3ec"
+version = "0.2.4"
+
+[[deps.KernelAbstractions]]
+deps = ["Adapt", "Atomix", "InteractiveUtils", "LinearAlgebra", "MacroTools", "PrecompileTools", "Requires", "SparseArrays", "StaticArrays", "UUIDs", "UnsafeAtomics", "UnsafeAtomicsLLVM"]
+git-tree-sha1 = "653e0824fc9ab55b3beec67a6dbbe514a65fb954"
+uuid = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+version = "0.9.15"
+
+    [deps.KernelAbstractions.extensions]
+    EnzymeExt = "EnzymeCore"
+
+    [deps.KernelAbstractions.weakdeps]
+    EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
+
+[[deps.KernelDensity]]
+deps = ["Distributions", "DocStringExtensions", "FFTW", "Interpolations", "StatsBase"]
+git-tree-sha1 = "fee018a29b60733876eb557804b5b109dd3dd8a7"
+uuid = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
+version = "0.6.8"
+
+[[deps.LAME_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "f6250b16881adf048549549fba48b1161acdac8c"
+uuid = "c1c5ebd0-6772-5130-a774-d5fcae4a789d"
+version = "3.100.1+0"
+
+[[deps.LERC_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "bf36f528eec6634efc60d7ec062008f171071434"
+uuid = "88015f11-f218-50d7-93a8-a6af411a945d"
+version = "3.0.0+1"
+
+[[deps.LLVM]]
+deps = ["CEnum", "LLVMExtra_jll", "Libdl", "Preferences", "Printf", "Requires", "Unicode"]
+git-tree-sha1 = "cb4619f7353fc62a1a22ffa3d7ed9791cfb47ad8"
+uuid = "929cbde3-209d-540e-8aea-75f648917ca0"
+version = "6.4.2"
+
+    [deps.LLVM.extensions]
+    BFloat16sExt = "BFloat16s"
+
+    [deps.LLVM.weakdeps]
+    BFloat16s = "ab4f0b2a-ad5b-11e8-123f-65d77653426b"
+
+[[deps.LLVMExtra_jll]]
+deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
+git-tree-sha1 = "98eaee04d96d973e79c25d49167668c5c8fb50e2"
+uuid = "dad2f222-ce93-54a1-a47d-0025e8a3acab"
+version = "0.0.27+1"
+
+[[deps.LLVMOpenMP_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "d986ce2d884d49126836ea94ed5bfb0f12679713"
+uuid = "1d63c593-3942-5779-bab2-d838dc0a180e"
+version = "15.0.7+0"
+
+[[deps.LZO_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "e5b909bcf985c5e2605737d2ce278ed791b89be6"
+uuid = "dd4b983a-f0e5-5f8d-a1b7-129d4a5fb1ac"
+version = "2.10.1+0"
+
+[[deps.LaTeXStrings]]
+git-tree-sha1 = "50901ebc375ed41dbf8058da26f9de442febbbec"
+uuid = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+version = "1.3.1"
+
+[[deps.Latexify]]
+deps = ["Formatting", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "OrderedCollections", "Printf", "Requires"]
+git-tree-sha1 = "f428ae552340899a935973270b8d98e5a31c49fe"
+uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
+version = "0.16.1"
+
+    [deps.Latexify.extensions]
+    DataFramesExt = "DataFrames"
+    SymEngineExt = "SymEngine"
+
+    [deps.Latexify.weakdeps]
+    DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+    SymEngine = "123dc426-2d89-5057-bbad-38513e3affd8"
+
+[[deps.LazyArtifacts]]
+deps = ["Artifacts", "Pkg"]
+uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
+
+[[deps.LibCURL]]
+deps = ["LibCURL_jll", "MozillaCACerts_jll"]
+uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
+version = "0.6.4"
+
+[[deps.LibCURL_jll]]
+deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
+uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
+version = "8.4.0+0"
+
+[[deps.LibGit2]]
+deps = ["Base64", "LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
+uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
+
+[[deps.LibGit2_jll]]
+deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll"]
+uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
+version = "1.6.4+0"
+
+[[deps.LibSSH2_jll]]
+deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
+uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+version = "1.11.0+1"
+
+[[deps.Libdl]]
+uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+
+[[deps.Libffi_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "0b4a5d71f3e5200a7dff793393e09dfc2d874290"
+uuid = "e9f186c6-92d2-5b65-8a66-fee21dc1b490"
+version = "3.2.2+1"
+
+[[deps.Libgcrypt_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgpg_error_jll", "Pkg"]
+git-tree-sha1 = "64613c82a59c120435c067c2b809fc61cf5166ae"
+uuid = "d4300ac3-e22c-5743-9152-c294e39db1e4"
+version = "1.8.7+0"
+
+[[deps.Libglvnd_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll", "Xorg_libXext_jll"]
+git-tree-sha1 = "6f73d1dd803986947b2c750138528a999a6c7733"
+uuid = "7e76a0d4-f3c7-5321-8279-8d96eeed0f29"
+version = "1.6.0+0"
+
+[[deps.Libgpg_error_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "c333716e46366857753e273ce6a69ee0945a6db9"
+uuid = "7add5ba3-2f88-524e-9cd5-f83b8a55f7b8"
+version = "1.42.0+0"
+
+[[deps.Libiconv_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "f9557a255370125b405568f9767d6d195822a175"
+uuid = "94ce4f54-9a6c-5748-9c1c-f9c7231a4531"
+version = "1.17.0+0"
+
+[[deps.Libmount_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "9c30530bf0effd46e15e0fdcf2b8636e78cbbd73"
+uuid = "4b2f31a3-9ecc-558c-b454-b3730dcb73e9"
+version = "2.35.0+0"
+
+[[deps.Libtiff_jll]]
+deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "LERC_jll", "Libdl", "XZ_jll", "Zlib_jll", "Zstd_jll"]
+git-tree-sha1 = "2da088d113af58221c52828a80378e16be7d037a"
+uuid = "89763e89-9b03-5906-acba-b20f662cd828"
+version = "4.5.1+1"
+
+[[deps.Libuuid_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "7f3efec06033682db852f8b3bc3c1d2b0a0ab066"
+uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
+version = "2.36.0+0"
+
+[[deps.LinearAlgebra]]
+deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
+uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[[deps.LogExpFunctions]]
+deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
+git-tree-sha1 = "7d6dd4e9212aebaeed356de34ccf262a3cd415aa"
+uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+version = "0.3.26"
+
+    [deps.LogExpFunctions.extensions]
+    LogExpFunctionsChainRulesCoreExt = "ChainRulesCore"
+    LogExpFunctionsChangesOfVariablesExt = "ChangesOfVariables"
+    LogExpFunctionsInverseFunctionsExt = "InverseFunctions"
+
+    [deps.LogExpFunctions.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    ChangesOfVariables = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
+    InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
+
+[[deps.Logging]]
+uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[[deps.LoggingExtras]]
+deps = ["Dates", "Logging"]
+git-tree-sha1 = "c1dd6d7978c12545b4179fb6153b9250c96b0075"
+uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
+version = "1.0.3"
+
+[[deps.LoweredCodeUtils]]
+deps = ["JuliaInterpreter"]
+git-tree-sha1 = "38756922d32476c8f41f73560b910fc805a5a103"
+uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
+version = "2.4.3"
+
+[[deps.MIMEs]]
+git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "0.1.4"
+
+[[deps.MKL_jll]]
+deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl"]
+git-tree-sha1 = "72dc3cf284559eb8f53aa593fe62cb33f83ed0c0"
+uuid = "856f044c-d86e-5d09-b602-aeab76dc8ba7"
+version = "2024.0.0+0"
+
+[[deps.MLStyle]]
+git-tree-sha1 = "bc38dff0548128765760c79eb7388a4b37fae2c8"
+uuid = "d8e11817-5142-5d16-987a-aa16d5891078"
+version = "0.4.17"
+
+[[deps.MLUtils]]
+deps = ["ChainRulesCore", "Compat", "DataAPI", "DelimitedFiles", "FLoops", "NNlib", "Random", "ShowCases", "SimpleTraits", "Statistics", "StatsBase", "Tables", "Transducers"]
+git-tree-sha1 = "b45738c2e3d0d402dffa32b2c1654759a2ac35a4"
+uuid = "f1d291b0-491e-4a28-83b9-f70985020b54"
+version = "0.4.4"
+
+[[deps.MacroTools]]
+deps = ["Markdown", "Random"]
+git-tree-sha1 = "b211c553c199c111d998ecdaf7623d1b89b69f93"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.12"
+
+[[deps.Markdown]]
+deps = ["Base64"]
+uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+
+[[deps.MbedTLS]]
+deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "NetworkOptions", "Random", "Sockets"]
+git-tree-sha1 = "c067a280ddc25f196b5e7df3877c6b226d390aaf"
+uuid = "739be429-bea8-5141-9913-cc70e7f3736d"
+version = "1.1.9"
+
+[[deps.MbedTLS_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
+version = "2.28.2+1"
+
+[[deps.Measures]]
+git-tree-sha1 = "c13304c81eec1ed3af7fc20e75fb6b26092a1102"
+uuid = "442fdcdd-2543-5da2-b0f3-8c86c306513e"
+version = "0.3.2"
+
+[[deps.MicroCollections]]
+deps = ["BangBang", "InitialValues", "Setfield"]
+git-tree-sha1 = "629afd7d10dbc6935ec59b32daeb33bc4460a42e"
+uuid = "128add7d-3638-4c79-886c-908ea0c25c34"
+version = "0.1.4"
+
+[[deps.Missings]]
+deps = ["DataAPI"]
+git-tree-sha1 = "f66bdc5de519e8f8ae43bdc598782d35a25b1272"
+uuid = "e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28"
+version = "1.1.0"
+
+[[deps.Mmap]]
+uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+
+[[deps.MozillaCACerts_jll]]
+uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
+version = "2023.1.10"
+
+[[deps.MultivariateStats]]
+deps = ["Arpack", "LinearAlgebra", "SparseArrays", "Statistics", "StatsAPI", "StatsBase"]
+git-tree-sha1 = "68bf5103e002c44adfd71fea6bd770b3f0586843"
+uuid = "6f286f6a-111f-5878-ab1e-185364afe411"
+version = "0.10.2"
+
+[[deps.NNlib]]
+deps = ["Adapt", "Atomix", "ChainRulesCore", "GPUArraysCore", "KernelAbstractions", "LinearAlgebra", "Pkg", "Random", "Requires", "Statistics"]
+git-tree-sha1 = "900a11b3a2b02e36b25cb55a80777d4a4670f0f6"
+uuid = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
+version = "0.9.10"
+
+    [deps.NNlib.extensions]
+    NNlibAMDGPUExt = "AMDGPU"
+    NNlibCUDACUDNNExt = ["CUDA", "cuDNN"]
+    NNlibCUDAExt = "CUDA"
+    NNlibEnzymeCoreExt = "EnzymeCore"
+
+    [deps.NNlib.weakdeps]
+    AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+    CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+    EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
+    cuDNN = "02a925ec-e4fe-4b08-9a7e-0d78e3d38ccd"
+
+[[deps.NaNMath]]
+deps = ["OpenLibm_jll"]
+git-tree-sha1 = "0877504529a3e5c3343c6f8b4c0381e57e4387e4"
+uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
+version = "1.0.2"
+
+[[deps.NameResolution]]
+deps = ["PrettyPrint"]
+git-tree-sha1 = "1a0fa0e9613f46c9b8c11eee38ebb4f590013c5e"
+uuid = "71a1bf82-56d0-4bbc-8a3c-48b961074391"
+version = "0.1.5"
+
+[[deps.NearestNeighbors]]
+deps = ["Distances", "StaticArrays"]
+git-tree-sha1 = "ded64ff6d4fdd1cb68dfcbb818c69e144a5b2e4c"
+uuid = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
+version = "0.4.16"
+
+[[deps.NetworkOptions]]
+uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
+version = "1.2.0"
+
+[[deps.Observables]]
+git-tree-sha1 = "7438a59546cf62428fc9d1bc94729146d37a7225"
+uuid = "510215fc-4207-5dde-b226-833fc4488ee2"
+version = "0.5.5"
+
+[[deps.OffsetArrays]]
+git-tree-sha1 = "6a731f2b5c03157418a20c12195eb4b74c8f8621"
+uuid = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
+version = "1.13.0"
+weakdeps = ["Adapt"]
+
+    [deps.OffsetArrays.extensions]
+    OffsetArraysAdaptExt = "Adapt"
+
+[[deps.Ogg_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "887579a3eb005446d514ab7aeac5d1d027658b8f"
+uuid = "e7412a2a-1a6e-54c0-be00-318e2571c051"
+version = "1.3.5+1"
+
+[[deps.OneHotArrays]]
+deps = ["Adapt", "ChainRulesCore", "Compat", "GPUArraysCore", "LinearAlgebra", "NNlib"]
+git-tree-sha1 = "5e4029759e8699ec12ebdf8721e51a659443403c"
+uuid = "0b1bfda6-eb8a-41d2-88d8-f5af5cad476f"
+version = "0.2.4"
+
+[[deps.OpenBLAS_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
+uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+version = "0.3.23+4"
+
+[[deps.OpenLibm_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+version = "0.8.1+2"
+
+[[deps.OpenSSL]]
+deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
+git-tree-sha1 = "51901a49222b09e3743c65b8847687ae5fc78eb2"
+uuid = "4d8831e6-92b7-49fb-bdf8-b643e874388c"
+version = "1.4.1"
+
+[[deps.OpenSSL_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "cc6e1927ac521b659af340e0ca45828a3ffc748f"
+uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
+version = "3.0.12+0"
+
+[[deps.OpenSpecFun_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
+uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
+version = "0.5.5+0"
+
+[[deps.Optimisers]]
+deps = ["ChainRulesCore", "Functors", "LinearAlgebra", "Random", "Statistics"]
+git-tree-sha1 = "34205b1204cc83c43cd9cfe53ffbd3b310f6e8c5"
+uuid = "3bd65402-5787-11e9-1adc-39752487f4e2"
+version = "0.3.1"
+
+[[deps.Opus_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "51a08fb14ec28da2ec7a927c4337e4332c2a4720"
+uuid = "91d4177d-7536-5919-b921-800302f37372"
+version = "1.3.2+0"
+
+[[deps.OrderedCollections]]
+git-tree-sha1 = "dfdf5519f235516220579f949664f1bf44e741c5"
+uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+version = "1.6.3"
+
+[[deps.PCRE2_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
+version = "10.42.0+1"
+
+[[deps.PDMats]]
+deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
+git-tree-sha1 = "949347156c25054de2db3b166c52ac4728cbad65"
+uuid = "90014a1f-27ba-587c-ab20-58faa44d9150"
+version = "0.11.31"
+
+[[deps.PalmerPenguins]]
+deps = ["CSV", "DataDeps"]
+git-tree-sha1 = "e7c581b0e29f7d35f47927d65d4965b413c10d90"
+uuid = "8b842266-38fa-440a-9b57-31493939ab85"
+version = "0.1.4"
+
+[[deps.Parsers]]
+deps = ["Dates", "PrecompileTools", "UUIDs"]
+git-tree-sha1 = "8489905bcdbcfac64d1daa51ca07c0d8f0283821"
+uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
+version = "2.8.1"
+
+[[deps.Pipe]]
+git-tree-sha1 = "6842804e7867b115ca9de748a0cf6b364523c16d"
+uuid = "b98c9c47-44ae-5843-9183-064241ee97a0"
+version = "1.3.0"
+
+[[deps.Pixman_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_jll", "Libdl"]
+git-tree-sha1 = "64779bc4c9784fee475689a1752ef4d5747c5e87"
+uuid = "30392449-352a-5448-841d-b1acce4e97dc"
+version = "0.42.2+0"
+
+[[deps.Pkg]]
+deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
+uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+version = "1.10.0"
+
+[[deps.PlotThemes]]
+deps = ["PlotUtils", "Statistics"]
+git-tree-sha1 = "1f03a2d339f42dca4a4da149c7e15e9b896ad899"
+uuid = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
+version = "3.1.0"
+
+[[deps.PlotUtils]]
+deps = ["ColorSchemes", "Colors", "Dates", "PrecompileTools", "Printf", "Random", "Reexport", "Statistics"]
+git-tree-sha1 = "862942baf5663da528f66d24996eb6da85218e76"
+uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
+version = "1.4.0"
+
+[[deps.Plots]]
+deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "PrecompileTools", "Preferences", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "UnitfulLatexify", "Unzip"]
+git-tree-sha1 = "ccee59c6e48e6f2edf8a5b64dc817b6729f99eb5"
+uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+version = "1.39.0"
+
+    [deps.Plots.extensions]
+    FileIOExt = "FileIO"
+    GeometryBasicsExt = "GeometryBasics"
+    IJuliaExt = "IJulia"
+    ImageInTerminalExt = "ImageInTerminal"
+    UnitfulExt = "Unitful"
+
+    [deps.Plots.weakdeps]
+    FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+    GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
+    IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
+    ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
+    Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[[deps.PlutoHooks]]
+deps = ["InteractiveUtils", "Markdown", "UUIDs"]
+git-tree-sha1 = "072cdf20c9b0507fdd977d7d246d90030609674b"
+uuid = "0ff47ea0-7a50-410d-8455-4348d5de0774"
+version = "0.0.5"
+
+[[deps.PlutoLinks]]
+deps = ["FileWatching", "InteractiveUtils", "Markdown", "PlutoHooks", "Revise", "UUIDs"]
+git-tree-sha1 = "8f5fa7056e6dcfb23ac5211de38e6c03f6367794"
+uuid = "0ff47ea0-7a50-410d-8455-4348d5de0420"
+version = "0.1.6"
+
+[[deps.PlutoTeachingTools]]
+deps = ["Downloads", "HypertextLiteral", "LaTeXStrings", "Latexify", "Markdown", "PlutoLinks", "PlutoUI", "Random"]
+git-tree-sha1 = "89f57f710cc121a7f32473791af3d6beefc59051"
+uuid = "661c6b06-c737-4d37-b85c-46df65de6f69"
+version = "0.2.14"
+
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "bd7c69c7f7173097e7b5e1be07cee2b8b7447f51"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.54"
+
+[[deps.PooledArrays]]
+deps = ["DataAPI", "Future"]
+git-tree-sha1 = "36d8b4b899628fb92c2749eb488d884a926614d3"
+uuid = "2dfb63ee-cc39-5dd5-95bd-886bf059d720"
+version = "1.4.3"
+
+[[deps.PrecompileTools]]
+deps = ["Preferences"]
+git-tree-sha1 = "03b4c25b43cb84cee5c90aa9b5ea0a78fd848d2f"
+uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+version = "1.2.0"
+
+[[deps.Preferences]]
+deps = ["TOML"]
+git-tree-sha1 = "00805cd429dcb4870060ff49ef443486c262e38e"
+uuid = "21216c6a-2e73-6563-6e65-726566657250"
+version = "1.4.1"
+
+[[deps.PrettyPrint]]
+git-tree-sha1 = "632eb4abab3449ab30c5e1afaa874f0b98b586e4"
+uuid = "8162dcfd-2161-5ef2-ae6c-7681170c5f98"
+version = "0.2.0"
+
+[[deps.PrettyTables]]
+deps = ["Crayons", "LaTeXStrings", "Markdown", "PrecompileTools", "Printf", "Reexport", "StringManipulation", "Tables"]
+git-tree-sha1 = "88b895d13d53b5577fd53379d913b9ab9ac82660"
+uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
+version = "2.3.1"
+
+[[deps.Printf]]
+deps = ["Unicode"]
+uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[[deps.ProgressLogging]]
+deps = ["Logging", "SHA", "UUIDs"]
+git-tree-sha1 = "80d919dee55b9c50e8d9e2da5eeafff3fe58b539"
+uuid = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
+version = "0.1.4"
+
+[[deps.Qt6Base_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Vulkan_Loader_jll", "Xorg_libSM_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_cursor_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "libinput_jll", "xkbcommon_jll"]
+git-tree-sha1 = "37b7bb7aabf9a085e0044307e1717436117f2b3b"
+uuid = "c0090381-4147-56d7-9ebc-da0b1113ec56"
+version = "6.5.3+1"
+
+[[deps.QuadGK]]
+deps = ["DataStructures", "LinearAlgebra"]
+git-tree-sha1 = "9ebcd48c498668c7fa0e97a9cae873fbee7bfee1"
+uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
+version = "2.9.1"
+
+[[deps.REPL]]
+deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
+uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
+
+[[deps.Random]]
+deps = ["SHA"]
+uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[[deps.Ratios]]
+deps = ["Requires"]
+git-tree-sha1 = "1342a47bf3260ee108163042310d26f2be5ec90b"
+uuid = "c84ed2f1-dad5-54f0-aa8e-dbefe2724439"
+version = "0.4.5"
+weakdeps = ["FixedPointNumbers"]
+
+    [deps.Ratios.extensions]
+    RatiosFixedPointNumbersExt = "FixedPointNumbers"
+
+[[deps.RealDot]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "9f0a1b71baaf7650f4fa8a1d168c7fb6ee41f0c9"
+uuid = "c1ae055f-0cd5-4b69-90a6-9a35b1a98df9"
+version = "0.1.0"
+
+[[deps.RecipesBase]]
+deps = ["PrecompileTools"]
+git-tree-sha1 = "5c3d09cc4f31f5fc6af001c250bf1278733100ff"
+uuid = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+version = "1.3.4"
+
+[[deps.RecipesPipeline]]
+deps = ["Dates", "NaNMath", "PlotUtils", "PrecompileTools", "RecipesBase"]
+git-tree-sha1 = "45cf9fd0ca5839d06ef333c8201714e888486342"
+uuid = "01d81517-befc-4cb6-b9ec-a95719d0359c"
+version = "0.6.12"
+
+[[deps.Reexport]]
+git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
+uuid = "189a3867-3050-52da-a836-e630ba90ab69"
+version = "1.2.2"
+
+[[deps.RelocatableFolders]]
+deps = ["SHA", "Scratch"]
+git-tree-sha1 = "ffdaf70d81cf6ff22c2b6e733c900c3321cab864"
+uuid = "05181044-ff0b-4ac5-8273-598c1e38db00"
+version = "1.0.1"
+
+[[deps.Requires]]
+deps = ["UUIDs"]
+git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
+uuid = "ae029012-a4dd-5104-9daa-d747884805df"
+version = "1.3.0"
+
+[[deps.Revise]]
+deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
+git-tree-sha1 = "3fe4e5b9cdbb9bbc851c57b149e516acc07f8f72"
+uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
+version = "3.5.13"
+
+[[deps.Rmath]]
+deps = ["Random", "Rmath_jll"]
+git-tree-sha1 = "f65dcb5fa46aee0cf9ed6274ccbd597adc49aa7b"
+uuid = "79098fc4-a85e-5d69-aa6a-4863f24498fa"
+version = "0.7.1"
+
+[[deps.Rmath_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "6ed52fdd3382cf21947b15e8870ac0ddbff736da"
+uuid = "f50d1b31-88e8-58de-be2c-1cc44531875f"
+version = "0.4.0+0"
+
+[[deps.SHA]]
+uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
+
+[[deps.Scratch]]
+deps = ["Dates"]
+git-tree-sha1 = "3bac05bc7e74a75fd9cba4295cde4045d9fe2386"
+uuid = "6c6a2e73-6563-6170-7368-637461726353"
+version = "1.2.1"
+
+[[deps.SentinelArrays]]
+deps = ["Dates", "Random"]
+git-tree-sha1 = "0e7508ff27ba32f26cd459474ca2ede1bc10991f"
+uuid = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
+version = "1.4.1"
+
+[[deps.Serialization]]
+uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+
+[[deps.Setfield]]
+deps = ["ConstructionBase", "Future", "MacroTools", "StaticArraysCore"]
+git-tree-sha1 = "e2cc6d8c88613c05e1defb55170bf5ff211fbeac"
+uuid = "efcf1570-3423-57d1-acb7-fd33fddbac46"
+version = "1.1.1"
+
+[[deps.SharedArrays]]
+deps = ["Distributed", "Mmap", "Random", "Serialization"]
+uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
+
+[[deps.ShowCases]]
+git-tree-sha1 = "7f534ad62ab2bd48591bdeac81994ea8c445e4a5"
+uuid = "605ecd9f-84a6-4c9e-81e2-4798472b76a3"
+version = "0.1.0"
+
+[[deps.Showoff]]
+deps = ["Dates", "Grisu"]
+git-tree-sha1 = "91eddf657aca81df9ae6ceb20b959ae5653ad1de"
+uuid = "992d4aef-0814-514b-bc4d-f2e9a6c4116f"
+version = "1.0.3"
+
+[[deps.SimpleBufferStream]]
+git-tree-sha1 = "874e8867b33a00e784c8a7e4b60afe9e037b74e1"
+uuid = "777ac1f9-54b0-4bf8-805c-2214025038e7"
+version = "1.1.0"
+
+[[deps.SimpleTraits]]
+deps = ["InteractiveUtils", "MacroTools"]
+git-tree-sha1 = "5d7e3f4e11935503d3ecaf7186eac40602e7d231"
+uuid = "699a6c99-e7fa-54fc-8d76-47d257e15c1d"
+version = "0.9.4"
+
+[[deps.Sockets]]
+uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
+
+[[deps.SortingAlgorithms]]
+deps = ["DataStructures"]
+git-tree-sha1 = "66e0a8e672a0bdfca2c3f5937efb8538b9ddc085"
+uuid = "a2af1166-a08f-5f64-846c-94a0d3cef48c"
+version = "1.2.1"
+
+[[deps.SparseArrays]]
+deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
+uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+version = "1.10.0"
+
+[[deps.SparseInverseSubset]]
+deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
+git-tree-sha1 = "52962839426b75b3021296f7df242e40ecfc0852"
+uuid = "dc90abb0-5640-4711-901d-7e5b23a2fada"
+version = "0.1.2"
+
+[[deps.SpecialFunctions]]
+deps = ["IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
+git-tree-sha1 = "e2cfc4012a19088254b3950b85c3c1d8882d864d"
+uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
+version = "2.3.1"
+weakdeps = ["ChainRulesCore"]
+
+    [deps.SpecialFunctions.extensions]
+    SpecialFunctionsChainRulesCoreExt = "ChainRulesCore"
+
+[[deps.SplittablesBase]]
+deps = ["Setfield", "Test"]
+git-tree-sha1 = "e08a62abc517eb79667d0a29dc08a3b589516bb5"
+uuid = "171d559e-b47b-412a-8079-5efa626c420e"
+version = "0.1.15"
+
+[[deps.StaticArrays]]
+deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
+git-tree-sha1 = "4e17a790909b17f7bf1496e3aec138cf01b60b3b"
+uuid = "90137ffa-7385-5640-81b9-e52037218182"
+version = "1.9.0"
+weakdeps = ["ChainRulesCore", "Statistics"]
+
+    [deps.StaticArrays.extensions]
+    StaticArraysChainRulesCoreExt = "ChainRulesCore"
+    StaticArraysStatisticsExt = "Statistics"
+
+[[deps.StaticArraysCore]]
+git-tree-sha1 = "36b3d696ce6366023a0ea192b4cd442268995a0d"
+uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
+version = "1.4.2"
+
+[[deps.Statistics]]
+deps = ["LinearAlgebra", "SparseArrays"]
+uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+version = "1.10.0"
+
+[[deps.StatsAPI]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "1ff449ad350c9c4cbc756624d6f8a8c3ef56d3ed"
+uuid = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
+version = "1.7.0"
+
+[[deps.StatsBase]]
+deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
+git-tree-sha1 = "1d77abd07f617c4868c33d4f5b9e1dbb2643c9cf"
+uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+version = "0.34.2"
+
+[[deps.StatsFuns]]
+deps = ["HypergeometricFunctions", "IrrationalConstants", "LogExpFunctions", "Reexport", "Rmath", "SpecialFunctions"]
+git-tree-sha1 = "f625d686d5a88bcd2b15cd81f18f98186fdc0c9a"
+uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
+version = "1.3.0"
+
+    [deps.StatsFuns.extensions]
+    StatsFunsChainRulesCoreExt = "ChainRulesCore"
+    StatsFunsInverseFunctionsExt = "InverseFunctions"
+
+    [deps.StatsFuns.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
+
+[[deps.StatsPlots]]
+deps = ["AbstractFFTs", "Clustering", "DataStructures", "Distributions", "Interpolations", "KernelDensity", "LinearAlgebra", "MultivariateStats", "NaNMath", "Observables", "Plots", "RecipesBase", "RecipesPipeline", "Reexport", "StatsBase", "TableOperations", "Tables", "Widgets"]
+git-tree-sha1 = "9115a29e6c2cf66cf213ccc17ffd61e27e743b24"
+uuid = "f3b207a7-027a-5e70-b257-86293d7955fd"
+version = "0.15.6"
+
+[[deps.StringManipulation]]
+deps = ["PrecompileTools"]
+git-tree-sha1 = "a04cabe79c5f01f4d723cc6704070ada0b9d46d5"
+uuid = "892a3eda-7b42-436c-8928-eab12a02cf0e"
+version = "0.3.4"
+
+[[deps.StructArrays]]
+deps = ["Adapt", "ConstructionBase", "DataAPI", "GPUArraysCore", "StaticArraysCore", "Tables"]
+git-tree-sha1 = "0a3db38e4cce3c54fe7a71f831cd7b6194a54213"
+uuid = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
+version = "0.6.16"
+
+[[deps.SuiteSparse]]
+deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
+uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
+
+[[deps.SuiteSparse_jll]]
+deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
+uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
+version = "7.2.1+1"
+
+[[deps.TOML]]
+deps = ["Dates"]
+uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.3"
+
+[[deps.TableOperations]]
+deps = ["SentinelArrays", "Tables", "Test"]
+git-tree-sha1 = "e383c87cf2a1dc41fa30c093b2a19877c83e1bc1"
+uuid = "ab02a1b2-a7df-11e8-156e-fb1833f50b87"
+version = "1.2.0"
+
+[[deps.TableTraits]]
+deps = ["IteratorInterfaceExtensions"]
+git-tree-sha1 = "c06b2f539df1c6efa794486abfb6ed2022561a39"
+uuid = "3783bdb8-4a98-5b6b-af9a-565f29a5fe9c"
+version = "1.0.1"
+
+[[deps.Tables]]
+deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "OrderedCollections", "TableTraits"]
+git-tree-sha1 = "cb76cf677714c095e535e3501ac7954732aeea2d"
+uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
+version = "1.11.1"
+
+[[deps.Tar]]
+deps = ["ArgTools", "SHA"]
+uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
+version = "1.10.0"
+
+[[deps.TensorCore]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
+uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
+version = "0.1.1"
+
+[[deps.Test]]
+deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
+uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[[deps.TranscodingStreams]]
+git-tree-sha1 = "1fbeaaca45801b4ba17c251dd8603ef24801dd84"
+uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
+version = "0.10.2"
+weakdeps = ["Random", "Test"]
+
+    [deps.TranscodingStreams.extensions]
+    TestExt = ["Test", "Random"]
+
+[[deps.Transducers]]
+deps = ["Adapt", "ArgCheck", "BangBang", "Baselet", "CompositionsBase", "ConstructionBase", "DefineSingletons", "Distributed", "InitialValues", "Logging", "Markdown", "MicroCollections", "Requires", "Setfield", "SplittablesBase", "Tables"]
+git-tree-sha1 = "3064e780dbb8a9296ebb3af8f440f787bb5332af"
+uuid = "28d57a85-8fef-5791-bfe6-a80928e7c999"
+version = "0.4.80"
+
+    [deps.Transducers.extensions]
+    TransducersBlockArraysExt = "BlockArrays"
+    TransducersDataFramesExt = "DataFrames"
+    TransducersLazyArraysExt = "LazyArrays"
+    TransducersOnlineStatsBaseExt = "OnlineStatsBase"
+    TransducersReferenceablesExt = "Referenceables"
+
+    [deps.Transducers.weakdeps]
+    BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
+    DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+    LazyArrays = "5078a376-72f3-5289-bfd5-ec5146d43c02"
+    OnlineStatsBase = "925886fa-5bf2-5e8e-b522-a9147a512338"
+    Referenceables = "42d2dcc6-99eb-4e98-b66c-637b7d73030e"
+
+[[deps.Tricks]]
+git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.8"
+
+[[deps.URIs]]
+git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
+uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
+version = "1.5.1"
+
+[[deps.UUIDs]]
+deps = ["Random", "SHA"]
+uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+[[deps.Unicode]]
+uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+
+[[deps.UnicodeFun]]
+deps = ["REPL"]
+git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
+uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
+version = "0.4.1"
+
+[[deps.Unitful]]
+deps = ["Dates", "LinearAlgebra", "Random"]
+git-tree-sha1 = "3c793be6df9dd77a0cf49d80984ef9ff996948fa"
+uuid = "1986cc42-f94f-5a68-af5c-568840ba703d"
+version = "1.19.0"
+
+    [deps.Unitful.extensions]
+    ConstructionBaseUnitfulExt = "ConstructionBase"
+    InverseFunctionsUnitfulExt = "InverseFunctions"
+
+    [deps.Unitful.weakdeps]
+    ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
+    InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
+
+[[deps.UnitfulLatexify]]
+deps = ["LaTeXStrings", "Latexify", "Unitful"]
+git-tree-sha1 = "e2d817cc500e960fdbafcf988ac8436ba3208bfd"
+uuid = "45397f5d-5981-4c77-b2b3-fc36d6e9b728"
+version = "1.6.3"
+
+[[deps.UnsafeAtomics]]
+git-tree-sha1 = "6331ac3440856ea1988316b46045303bef658278"
+uuid = "013be700-e6cd-48c3-b4a1-df204f14c38f"
+version = "0.2.1"
+
+[[deps.UnsafeAtomicsLLVM]]
+deps = ["LLVM", "UnsafeAtomics"]
+git-tree-sha1 = "323e3d0acf5e78a56dfae7bd8928c989b4f3083e"
+uuid = "d80eeb9a-aca5-4d75-85e5-170c8b632249"
+version = "0.1.3"
+
+[[deps.Unzip]]
+git-tree-sha1 = "ca0969166a028236229f63514992fc073799bb78"
+uuid = "41fe7b60-77ed-43a1-b4f0-825fd5a5650d"
+version = "0.2.0"
+
+[[deps.Vulkan_Loader_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Wayland_jll", "Xorg_libX11_jll", "Xorg_libXrandr_jll", "xkbcommon_jll"]
+git-tree-sha1 = "2f0486047a07670caad3a81a075d2e518acc5c59"
+uuid = "a44049a8-05dd-5a78-86c9-5fde0876e88c"
+version = "1.3.243+0"
+
+[[deps.Wayland_jll]]
+deps = ["Artifacts", "EpollShim_jll", "Expat_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg", "XML2_jll"]
+git-tree-sha1 = "7558e29847e99bc3f04d6569e82d0f5c54460703"
+uuid = "a2964d1f-97da-50d4-b82a-358c7fce9d89"
+version = "1.21.0+1"
+
+[[deps.Wayland_protocols_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "93f43ab61b16ddfb2fd3bb13b3ce241cafb0e6c9"
+uuid = "2381bf8a-dfd0-557d-9999-79630e7b1b91"
+version = "1.31.0+0"
+
+[[deps.WeakRefStrings]]
+deps = ["DataAPI", "InlineStrings", "Parsers"]
+git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
+uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
+version = "1.4.2"
+
+[[deps.Widgets]]
+deps = ["Colors", "Dates", "Observables", "OrderedCollections"]
+git-tree-sha1 = "fcdae142c1cfc7d89de2d11e08721d0f2f86c98a"
+uuid = "cc8bc4a8-27d6-5769-a93b-9d913e69aa62"
+version = "0.6.6"
+
+[[deps.WoodburyMatrices]]
+deps = ["LinearAlgebra", "SparseArrays"]
+git-tree-sha1 = "5f24e158cf4cee437052371455fe361f526da062"
+uuid = "efce3f68-66dc-5838-9240-27a6d6f5f9b6"
+version = "0.5.6"
+
+[[deps.WorkerUtilities]]
+git-tree-sha1 = "cd1659ba0d57b71a464a29e64dbc67cfe83d54e7"
+uuid = "76eceee3-57b5-4d4a-8e66-0e911cebbf60"
+version = "1.6.1"
+
+[[deps.XML2_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
+git-tree-sha1 = "801cbe47eae69adc50f36c3caec4758d2650741b"
+uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
+version = "2.12.2+0"
+
+[[deps.XSLT_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Libiconv_jll", "Pkg", "XML2_jll", "Zlib_jll"]
+git-tree-sha1 = "91844873c4085240b95e795f692c4cec4d805f8a"
+uuid = "aed1982a-8fda-507f-9586-7b0439959a61"
+version = "1.1.34+0"
+
+[[deps.XZ_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "522b8414d40c4cbbab8dee346ac3a09f9768f25d"
+uuid = "ffd25f8a-64ca-5728-b0f7-c24cf3aae800"
+version = "5.4.5+0"
+
+[[deps.Xorg_libICE_jll]]
+deps = ["Libdl", "Pkg"]
+git-tree-sha1 = "e5becd4411063bdcac16be8b66fc2f9f6f1e8fe5"
+uuid = "f67eecfb-183a-506d-b269-f58e52b52d7c"
+version = "1.0.10+1"
+
+[[deps.Xorg_libSM_jll]]
+deps = ["Libdl", "Pkg", "Xorg_libICE_jll"]
+git-tree-sha1 = "4a9d9e4c180e1e8119b5ffc224a7b59d3a7f7e18"
+uuid = "c834827a-8449-5923-a945-d239c165b7dd"
+version = "1.2.3+0"
+
+[[deps.Xorg_libX11_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libxcb_jll", "Xorg_xtrans_jll"]
+git-tree-sha1 = "afead5aba5aa507ad5a3bf01f58f82c8d1403495"
+uuid = "4f6342f7-b3d2-589e-9d20-edeb45f2b2bc"
+version = "1.8.6+0"
+
+[[deps.Xorg_libXau_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "6035850dcc70518ca32f012e46015b9beeda49d8"
+uuid = "0c0b7dd1-d40b-584c-a123-a41640f87eec"
+version = "1.0.11+0"
+
+[[deps.Xorg_libXcursor_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libXfixes_jll", "Xorg_libXrender_jll"]
+git-tree-sha1 = "12e0eb3bc634fa2080c1c37fccf56f7c22989afd"
+uuid = "935fb764-8cf2-53bf-bb30-45bb1f8bf724"
+version = "1.2.0+4"
+
+[[deps.Xorg_libXdmcp_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "34d526d318358a859d7de23da945578e8e8727b7"
+uuid = "a3789734-cfe1-5b06-b2d0-1dd0d9d62d05"
+version = "1.1.4+0"
+
+[[deps.Xorg_libXext_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll"]
+git-tree-sha1 = "b7c0aa8c376b31e4852b360222848637f481f8c3"
+uuid = "1082639a-0dae-5f34-9b06-72781eeb8cb3"
+version = "1.3.4+4"
+
+[[deps.Xorg_libXfixes_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll"]
+git-tree-sha1 = "0e0dc7431e7a0587559f9294aeec269471c991a4"
+uuid = "d091e8ba-531a-589c-9de9-94069b037ed8"
+version = "5.0.3+4"
+
+[[deps.Xorg_libXi_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libXext_jll", "Xorg_libXfixes_jll"]
+git-tree-sha1 = "89b52bc2160aadc84d707093930ef0bffa641246"
+uuid = "a51aa0fd-4e3c-5386-b890-e753decda492"
+version = "1.7.10+4"
+
+[[deps.Xorg_libXinerama_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libXext_jll"]
+git-tree-sha1 = "26be8b1c342929259317d8b9f7b53bf2bb73b123"
+uuid = "d1454406-59df-5ea1-beac-c340f2130bc3"
+version = "1.1.4+4"
+
+[[deps.Xorg_libXrandr_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll"]
+git-tree-sha1 = "34cea83cb726fb58f325887bf0612c6b3fb17631"
+uuid = "ec84b674-ba8e-5d96-8ba1-2a689ba10484"
+version = "1.5.2+4"
+
+[[deps.Xorg_libXrender_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll"]
+git-tree-sha1 = "19560f30fd49f4d4efbe7002a1037f8c43d43b96"
+uuid = "ea2f1a96-1ddc-540d-b46f-429655e07cfa"
+version = "0.9.10+4"
+
+[[deps.Xorg_libpthread_stubs_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "8fdda4c692503d44d04a0603d9ac0982054635f9"
+uuid = "14d82f49-176c-5ed1-bb49-ad3f5cbd8c74"
+version = "0.1.1+0"
+
+[[deps.Xorg_libxcb_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "XSLT_jll", "Xorg_libXau_jll", "Xorg_libXdmcp_jll", "Xorg_libpthread_stubs_jll"]
+git-tree-sha1 = "b4bfde5d5b652e22b9c790ad00af08b6d042b97d"
+uuid = "c7cfdc94-dc32-55de-ac96-5a1b8d977c5b"
+version = "1.15.0+0"
+
+[[deps.Xorg_libxkbfile_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libX11_jll"]
+git-tree-sha1 = "730eeca102434283c50ccf7d1ecdadf521a765a4"
+uuid = "cc61e674-0454-545c-8b26-ed2c68acab7a"
+version = "1.1.2+0"
+
+[[deps.Xorg_xcb_util_cursor_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_jll", "Xorg_xcb_util_renderutil_jll"]
+git-tree-sha1 = "04341cb870f29dcd5e39055f895c39d016e18ccd"
+uuid = "e920d4aa-a673-5f3a-b3d7-f755a4d47c43"
+version = "0.1.4+0"
+
+[[deps.Xorg_xcb_util_image_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_xcb_util_jll"]
+git-tree-sha1 = "0fab0a40349ba1cba2c1da699243396ff8e94b97"
+uuid = "12413925-8142-5f55-bb0e-6d7ca50bb09b"
+version = "0.4.0+1"
+
+[[deps.Xorg_xcb_util_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libxcb_jll"]
+git-tree-sha1 = "e7fd7b2881fa2eaa72717420894d3938177862d1"
+uuid = "2def613f-5ad1-5310-b15b-b15d46f528f5"
+version = "0.4.0+1"
+
+[[deps.Xorg_xcb_util_keysyms_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_xcb_util_jll"]
+git-tree-sha1 = "d1151e2c45a544f32441a567d1690e701ec89b00"
+uuid = "975044d2-76e6-5fbe-bf08-97ce7c6574c7"
+version = "0.4.0+1"
+
+[[deps.Xorg_xcb_util_renderutil_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_xcb_util_jll"]
+git-tree-sha1 = "dfd7a8f38d4613b6a575253b3174dd991ca6183e"
+uuid = "0d47668e-0667-5a69-a72c-f761630bfb7e"
+version = "0.3.9+1"
+
+[[deps.Xorg_xcb_util_wm_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_xcb_util_jll"]
+git-tree-sha1 = "e78d10aab01a4a154142c5006ed44fd9e8e31b67"
+uuid = "c22f9ab0-d5fe-5066-847c-f4bb1cd4e361"
+version = "0.4.1+1"
+
+[[deps.Xorg_xkbcomp_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libxkbfile_jll"]
+git-tree-sha1 = "330f955bc41bb8f5270a369c473fc4a5a4e4d3cb"
+uuid = "35661453-b289-5fab-8a00-3d9160c6a3a4"
+version = "1.4.6+0"
+
+[[deps.Xorg_xkeyboard_config_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_xkbcomp_jll"]
+git-tree-sha1 = "691634e5453ad362044e2ad653e79f3ee3bb98c3"
+uuid = "33bec58e-1273-512f-9401-5d533626f822"
+version = "2.39.0+0"
+
+[[deps.Xorg_xtrans_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "e92a1a012a10506618f10b7047e478403a046c77"
+uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
+version = "1.5.0+0"
+
+[[deps.Zlib_jll]]
+deps = ["Libdl"]
+uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
+version = "1.2.13+1"
+
+[[deps.Zstd_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "49ce682769cd5de6c72dcf1b94ed7790cd08974c"
+uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
+version = "1.5.5+0"
+
+[[deps.Zygote]]
+deps = ["AbstractFFTs", "ChainRules", "ChainRulesCore", "DiffRules", "Distributed", "FillArrays", "ForwardDiff", "GPUArrays", "GPUArraysCore", "IRTools", "InteractiveUtils", "LinearAlgebra", "LogExpFunctions", "MacroTools", "NaNMath", "PrecompileTools", "Random", "Requires", "SparseArrays", "SpecialFunctions", "Statistics", "ZygoteRules"]
+git-tree-sha1 = "30c1b8bfc2b3c7c5d8bba7cd32e8b6d5f968e7c3"
+uuid = "e88e6eb3-aa80-5325-afca-941959d7151f"
+version = "0.6.68"
+
+    [deps.Zygote.extensions]
+    ZygoteColorsExt = "Colors"
+    ZygoteDistancesExt = "Distances"
+    ZygoteTrackerExt = "Tracker"
+
+    [deps.Zygote.weakdeps]
+    Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
+    Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+    Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
+
+[[deps.ZygoteRules]]
+deps = ["ChainRulesCore", "MacroTools"]
+git-tree-sha1 = "9d749cd449fb448aeca4feee9a2f4186dbb5d184"
+uuid = "700de1a5-db45-46bc-99cf-38207098b444"
+version = "0.2.4"
+
+[[deps.eudev_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "gperf_jll"]
+git-tree-sha1 = "431b678a28ebb559d224c0b6b6d01afce87c51ba"
+uuid = "35ca27e7-8b34-5b7f-bca9-bdc33f59eb06"
+version = "3.2.9+0"
+
+[[deps.fzf_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "a68c9655fbe6dfcab3d972808f1aafec151ce3f8"
+uuid = "214eeab7-80f7-51ab-84ad-2988db7cef09"
+version = "0.43.0+0"
+
+[[deps.gperf_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "3516a5630f741c9eecb3720b1ec9d8edc3ecc033"
+uuid = "1a1c6b14-54f6-533d-8383-74cd7377aa70"
+version = "3.1.1+0"
+
+[[deps.libaom_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "3a2ea60308f0996d26f1e5354e10c24e9ef905d4"
+uuid = "a4ae2306-e953-59d6-aa16-d00cac43593b"
+version = "3.4.0+0"
+
+[[deps.libass_jll]]
+deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "HarfBuzz_jll", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
+git-tree-sha1 = "5982a94fcba20f02f42ace44b9894ee2b140fe47"
+uuid = "0ac62f75-1d6f-5e53-bd7c-93b484bb37c0"
+version = "0.15.1+0"
+
+[[deps.libblastrampoline_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "5.8.0+1"
+
+[[deps.libevdev_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "141fe65dc3efabb0b1d5ba74e91f6ad26f84cc22"
+uuid = "2db6ffa8-e38f-5e21-84af-90c45d0032cc"
+version = "1.11.0+0"
+
+[[deps.libfdk_aac_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "daacc84a041563f965be61859a36e17c4e4fcd55"
+uuid = "f638f0a6-7fb0-5443-88ba-1cc74229b280"
+version = "2.0.2+0"
+
+[[deps.libinput_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "eudev_jll", "libevdev_jll", "mtdev_jll"]
+git-tree-sha1 = "ad50e5b90f222cfe78aa3d5183a20a12de1322ce"
+uuid = "36db933b-70db-51c0-b978-0f229ee0e533"
+version = "1.18.0+0"
+
+[[deps.libpng_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Zlib_jll"]
+git-tree-sha1 = "93284c28274d9e75218a416c65ec49d0e0fcdf3d"
+uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
+version = "1.6.40+0"
+
+[[deps.libvorbis_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
+git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
+uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
+version = "1.3.7+1"
+
+[[deps.mtdev_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "814e154bdb7be91d78b6802843f76b6ece642f11"
+uuid = "009596ad-96f7-51b1-9f1b-5ce2d5e8a71e"
+version = "1.1.6+0"
+
+[[deps.nghttp2_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
+version = "1.52.0+1"
+
+[[deps.p7zip_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
+version = "17.4.0+2"
+
+[[deps.x264_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "4fea590b89e6ec504593146bf8b988b2c00922b2"
+uuid = "1270edf5-f2f9-52d2-97e9-ab00b5d0237a"
+version = "2021.5.5+0"
+
+[[deps.x265_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "ee567a171cce03570d77ad3a43e90218e38937a9"
+uuid = "dfaa095f-4041-5dcd-9319-2fabd8486b76"
+version = "3.5.0+0"
+
+[[deps.xkbcommon_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Wayland_jll", "Wayland_protocols_jll", "Xorg_libxcb_jll", "Xorg_xkeyboard_config_jll"]
+git-tree-sha1 = "9c304562909ab2bab0262639bd4f444d7bc2be37"
+uuid = "d8fb68d0-12a3-5cfd-a85a-d49703b185fd"
+version = "1.4.1+1"
+"""
+
+# ╔═╡ Cell order:
+# ╟─9f90a18b-114f-4039-9aaf-f52c77205a49
+# ╟─e1d678d8-5a54-4f11-8fc6-5938c732c971
+# ╟─3e2e1ea8-3a7d-462f-ac38-43a087907a14
+# ╟─53fece27-0cf8-42ac-a2d1-a60dafde5820
+# ╟─587b7208-2559-4e4d-958c-09b0eec20caf
+# ╟─74e7d966-4795-4007-8a36-04fc48948b87
+# ╟─eb301a70-b651-43b4-b091-a3f90332d1aa
+# ╟─7bbf37e1-27fd-4871-bc1d-c9c3ecaac076
+# ╟─a0c70958-56fc-4536-ac9a-c5feea3e025b
+# ╟─603fdd1f-4505-4d57-965f-2d273c3c9979
+# ╟─bc96a33d-9011-41ec-a19e-d472cbaafb70
+# ╟─48255e3f-307a-49cc-ad5e-cb3557cbff11
+# ╟─560fcd11-616f-46c6-b0c5-2b8348af81d3
+# ╟─cf744c13-74c7-4c94-946b-7fb36b69f3da
+# ╟─c91f899c-18a3-46f8-b0a2-af122b06007c
+# ╟─8fb15c2c-d2ed-4da7-b570-3a4f6580f53e
+# ╟─f9e5a4f1-4c1d-4ab0-8d24-865407eeacf1
+# ╟─ffa724f4-8bfd-4d8c-bc6b-83ffc83c8cfa
+# ╟─3de4bc6d-a616-4125-8e18-ce54f8cdd4e8
+# ╟─520de0ba-11f9-42a9-9d29-fac3caf6cbe4
+# ╟─adf8aaa6-c5f4-4c53-8316-af55b0d29abb
+# ╟─4730c3dc-c6c5-4151-ad21-8e4335d846a7
+# ╟─fd8b60da-2f95-48c7-98e6-946f7108ab6c
+# ╟─3fca0b63-9747-4802-8624-91353eadb8f2
+# ╟─df9fd096-56a4-4610-b1fc-f7cce4e19e83
+# ╟─e73864ff-7106-4523-a049-805ca009796b
+# ╟─85da9bbd-ec12-48f0-9e96-0260cf68f04c
+# ╟─dbaf2be5-2005-4465-8cc2-c79ebf4343d4
+# ╟─420a9f4b-a698-4bfc-88d7-13fac4cb592d
+# ╟─0a23160c-b95c-4823-add6-5a0453e20afb
+# ╟─0d9885b7-71aa-40ad-affa-3f8555226d36
+# ╟─7ff58ca3-9b24-49ba-8a72-38a6f3bc778c
+# ╟─92e71a67-51dc-4c09-9e4c-d05fe191af60
+# ╟─44c0ddec-b08c-478a-a74a-9346ee496440
+# ╟─bf2fb318-0057-490d-b2fc-9eeda5381f54
+# ╟─e2b11e5b-616c-45e8-8e96-670c2487f8d3
+# ╟─27abf8f6-b06a-460c-8519-351cfcb09aeb
+# ╟─2df3f4dc-8985-4da4-887d-a865ee7b141c
+# ╟─0be915c9-a24c-41ff-886f-f9553171d3af
+# ╟─00fc176b-e7f1-4046-ae0d-fbdd0b55b9ea
+# ╟─09b0e6e5-5a9b-4028-b64f-3bbca81e09a8
+# ╠═aa623c42-1015-42c3-895a-74dc49b5c651
+# ╠═82a98346-b358-4e90-afa1-074b30247405
+# ╟─0d96b625-a929-41c4-bab2-d0f248fb58c9
+# ╠═1bfde516-f3e5-41c3-9f7d-c6cfbe4d4373
+# ╟─a754afcb-55bf-4d38-9dc3-efd8bbb565e9
+# ╟─7ccf2092-8fe8-4194-85c2-ca336cfcbe23
+# ╟─69a7335d-eb77-4e76-b59e-955bb9c40c8b
+# ╟─979e2617-fd43-452c-a6a3-8564861dd3f6
+# ╟─f1c74278-ba01-4e25-9b38-7fb2f32159a3
+# ╟─56e7ec6e-917c-407b-bc7e-6f07e511ad8b
+# ╟─1ed6e4d4-5e9a-4989-9fa9-210b574de6b0
+# ╟─75e3cbce-4dd6-48fe-b18a-e72a81464000
+# ╟─9e03ebc7-dbd2-4f51-ad21-f4e52e7d6eaf
+# ╟─3259e5fe-447b-4008-8b5f-cf6a1a13b1b3
+# ╟─011cb85f-6cf0-4a9b-83cd-b81ed394fe9c
+# ╟─c31321f5-08a4-4a0e-af27-56bfc789c0a5
+# ╟─e5f22c46-b4b1-401e-a7fa-0452c0fb5025
+# ╟─e7bb2f2b-99e9-45a8-9bca-ec806e80b359
+# ╟─b367f7ba-89df-4c09-8402-cdffe9155153
+# ╟─2dfec88b-380d-49ad-80f5-cdcd01e21cea
+# ╟─9e2d337a-0e26-4718-85ea-66b54349ec5d
+# ╟─44bc4e5b-28f8-4e2b-a5f2-b62ecc059ac4
+# ╟─e5d97403-420a-4588-ba3b-99842da5927f
+# ╟─23fbea1f-b083-46a1-924c-5485478345e3
+# ╟─4e0a9717-7014-4dc2-b601-79d59742c133
+# ╟─62d82f15-5d79-475f-a86b-0483f04a2d44
+# ╟─81e57214-62f5-4fe1-9a01-948c3175e43f
+# ╟─791330da-48ae-4ee0-a402-58764ce7e1bb
+# ╟─8695d896-cd0f-4153-a41b-9f24caf52047
+# ╟─bc571979-9458-4bfa-b74f-9c8105b79545
+# ╟─a307d1dd-7257-472f-bdc0-58e0a712fda7
+# ╟─a3890441-6f25-4c9e-8d7c-2b2b88829094
+# ╟─977112ba-29f5-4413-a7f8-4af33ce7fc44
+# ╟─a3809050-7e2a-4ceb-a08a-4708247a761e
+# ╟─81aa6f2c-a1ca-43f4-a550-a3ec45d2faaa
+# ╟─0b5237ce-d9a5-4ca2-b616-4c59c6b1dd12
+# ╟─68d6c0bd-0d71-48ba-97c2-53681fdc6e61
+# ╟─00fb253a-ad48-4d28-af17-5cdbc2cb81cb
+# ╟─84eec855-d97b-4dc9-8388-028547cdff89
+# ╟─0c44c37a-2291-4bde-990a-78b53e162b2a
+# ╟─3bf0cab8-de5d-4a58-b92e-c530aeca7547
+# ╟─9cbd6dc5-424c-44f9-b8b6-895f26e169b7
+# ╟─825161ce-ebc0-4b3a-a6db-c0e3fd8d0bb7
+# ╟─e38a2df0-7430-454e-bf59-525166b4b8c3
+# ╟─37a343a7-e0a1-4229-9125-999cb1551323
+# ╟─12871097-913a-489c-a5f8-9ed73be2dda2
+# ╟─a49bcf15-a3bd-482b-a2a1-186a20aa9e1f
+# ╟─c9d9aca3-91c5-4c72-8c3a-613d9a32d86b
+# ╟─0d38feef-ea74-4f99-8064-8fa7a6d4d6ae
+# ╟─67dbd8c3-3200-4a6c-b8ca-bf17aff233e4
+# ╟─80cdc39a-86be-45c1-8cde-5389c99ad354
+# ╟─8986d0dc-fb2e-43dc-b61a-f38ce1f94d1a
+# ╟─a1e0cfec-d1ad-4692-8125-c109819e3c75
+# ╟─71183436-0231-4e89-af31-9fb6ae9996f2
+# ╟─ade61f89-509e-4068-8fba-e5f95cdc13a2
+# ╟─44c19857-0051-4f27-b9f0-5ad7d81d9760
+# ╟─05f4be36-fd3e-4ffe-8049-eeeee4af03b5
+# ╟─e769fb23-7852-473f-bcd6-ae971f0ae66c
+# ╟─514b9328-6987-4436-b460-bfe9438c3ec6
+# ╟─b20dd0fb-ebae-4276-8f0b-401bc40c16ee
+# ╟─0c4008d0-b457-41b4-a578-b5a63c72a5b7
+# ╟─652bfbc5-769a-4f25-af45-b3337a32b368
+# ╟─a365490e-a4d9-4af0-835d-25b60327308e
+# ╟─2799fba9-8500-432f-9b2e-c164476dcb33
+# ╟─8bbdc4e2-5433-4e71-8922-c8fc435ce420
+# ╟─a1144fd3-45ba-47c1-a1f1-3ca7e53574a0
+# ╟─b5585816-fd8c-45ca-9b90-4b8a5a3209ad
+# ╟─e6b8a809-3c61-48b6-9215-6df865038316
+# ╟─7b70dcf0-affc-408a-8d27-5cfba8df2ca4
+# ╟─71e2c0f5-3cbe-485b-9191-f9193ff0fd87
+# ╟─3be8bb30-a8a9-4cbd-af8a-eca42045d86c
+# ╟─9f88f71b-f339-4fbe-8368-bd1d9daefe2b
+# ╟─db795dfc-e791-49bb-805a-35b6af3e1eb4
+# ╟─0afd7c8d-c7dd-4e31-ba9a-a6d8fa60a39c
+# ╟─c377fb2e-3d71-448a-97a9-efdac0fcdb97
+# ╠═b183816c-4496-45f5-8710-39b1ca84eed7
+# ╠═8038df9f-fce9-4fc7-af9e-91c318772043
+# ╟─4844845d-5f3e-44f5-a873-0d7de90d4ab1
+# ╠═b6cd5910-4cee-4ac5-81b8-a3bf75da15f0
+# ╠═1edf1a7b-616b-4801-bc81-a1bbd8df8854
+# ╠═1e020a5a-65b8-43d5-8f58-3a29e58da522
+# ╟─2e8b172a-3ddf-4a3e-9d37-88f9c96fc3f4
+# ╟─2f08cdad-667e-40b2-8a40-55641dc85933
+# ╟─fcb56737-1c2e-429f-82ec-6ca0add4d556
+# ╟─0826acba-18ca-441d-a802-7482b2c17faf
+# ╟─42ad4c47-d9b6-4f64-b1ee-caa5592adfab
+# ╟─96864302-2257-43a4-801b-150423e64047
+# ╟─5015bc1d-3b84-43be-b1c8-76953f362eab
+# ╟─0c5e681c-ba14-4657-b376-71b1b05b1c6f
+# ╟─e2b2e51c-cb19-42d4-b129-00f7d58d3f0d
+# ╟─67b9bcc8-5c3e-4b9b-9a65-fae332053f24
+# ╟─0d191d54-f36b-400c-8a74-f13a221827ad
+# ╟─f2647459-1721-45ed-8150-3513c0427b3d
+# ╟─3e72ec3b-9e3e-46a6-930d-8ae3f56e85ab
+# ╟─fe0428fb-cad9-4be6-bc65-6ca920efefdd
+# ╟─92f854cb-2b2e-421d-8e97-e3fa2e7ee8ad
+# ╟─7e513bcb-e12c-44c6-9faa-9ff99319220a
+# ╟─3dec4918-2048-4ac1-9f11-facf32acc783
+# ╟─4a56865d-88fe-4b4f-b34c-5d2eacc8f1db
+# ╟─89f918a2-62fb-4a78-86c0-a15260302a1a
+# ╟─9c6e8c54-c6b4-46a0-9c84-4e133cead30d
+# ╟─a9d29607-59a2-43ec-9e68-bba8b97b4b7d
+# ╟─7d6348e7-cb7f-4068-ad58-ebe18646bce5
+# ╟─5521fec7-f5f1-4cc9-9cf0-87b6e774bbd8
+# ╟─583ec82c-39a6-4b22-8556-627cbbe1b381
+# ╟─30c7f5be-3f0b-45ff-8a59-52e944d29703
+# ╟─0734ddb1-a9a0-4fe1-b5ee-9a839a33d1dc
+# ╟─41b227d5-fbbc-49f2-9d79-f928a7e66a3f
+# ╟─375a4529-c4d0-406c-b483-64efbdd56f39
+# ╟─8687dbd1-4857-40e4-b9cb-af469b8563e2
+# ╟─fab7a0dd-3a9e-463e-a66b-432a6b2d8a1b
+# ╟─491f5439-d984-4446-b473-8e6a0214bded
+# ╟─d0867ff4-da8a-45ce-adbc-8af12af89779
+# ╟─bc1c6156-5b95-4f22-949a-f2ae81d5b94d
+# ╟─ec704221-a9ab-4e98-9a17-b0843591a2e7
+# ╟─3d90e684-f6e3-466c-bd44-479597277edb
+# ╟─073798be-22ee-4280-9155-44831227e195
+# ╟─eea8ac82-9210-4734-bb07-8bf0e912434a
+# ╟─c9939ed7-1f77-448f-b593-3da7d6c1a901
+# ╟─23196682-02ae-4caf-9d75-3aba91df5b86
+# ╟─572dd293-a343-43d2-aa53-4775db9ec56a
+# ╟─00000000-0000-0000-0000-000000000001
+# ╟─00000000-0000-0000-0000-000000000002
